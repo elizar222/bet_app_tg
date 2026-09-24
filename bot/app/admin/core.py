@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -22,7 +23,17 @@ MENU_TEXT = "🛠 <b>Админка</b>\n\nВсё, что здесь настр�
 
 
 @router.message(CommandStart())
-async def start(message: Message, state: FSMContext) -> None:
+async def start(message: Message, state: FSMContext, single_bot: bool = False) -> None:
+    if single_bot:
+        # Один бот на всё: /start показывает то же, что видят пользователи,
+        # а админка открывается командой /admin.
+        raise SkipHandler()
+    await state.clear()
+    await message.answer(MENU_TEXT, reply_markup=main_menu())
+
+
+@router.message(Command("admin"))
+async def admin_command(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(MENU_TEXT, reply_markup=main_menu())
 

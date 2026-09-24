@@ -74,23 +74,18 @@ python run.py
 В `.env` поставь `WEB_DEV_USER_ID=<твой Telegram ID>`, запусти `python run.py`
 и открой http://127.0.0.1:8080. Перед боевым запуском верни `0`.
 
-### Открыть в Telegram со своего ПК
+### Запуск на своём ПК одной кнопкой
 
-Telegram открывает мини-аппы только по `https`. Бесплатный туннель:
+Дважды щёлкни `start.bat` в корне проекта. Он сам найдёт (или поставит)
+Python, установит библиотеки и запустит бота. С `WEBAPP_URL=auto` бот сам
+скачает `cloudflared` и поднимет бесплатный https-туннель — Telegram
+открывает мини-аппы только по https. Адрес туннеля каждый раз новый, кнопка
+«📊 Открыть терминал» в боте обновляется автоматически.
 
-1. Скачай `cloudflared` для Windows:
-   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-2. Во втором окне PowerShell:
-   ```powershell
-   cloudflared tunnel --url http://127.0.0.1:8080
-   ```
-   Он напечатает адрес вида `https://something.trycloudflare.com`.
-3. Впиши его в `.env` → `WEBAPP_URL=https://something.trycloudflare.com`
-   и перезапусти `python run.py`.
+Пока окно открыто — бот и мини-апп работают. Закрыл окно — всё выключилось.
 
-У рабочих ботов появится кнопка «📊 Открыть терминал» в меню и под /start.
-Пока ПК выключен или туннель закрыт, мини-апп не открывается. Адрес
-бесплатного туннеля меняется при каждом запуске — обновляй `WEBAPP_URL`.
+Если `ADMIN_BOT_TOKEN` пустой, админка живёт в том же боте: команда `/admin`
+(только для `ADMIN_IDS`).
 
 ### VIP
 

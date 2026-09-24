@@ -36,6 +36,12 @@ class Config:
     webapp_url: str = ""  # публичный https-адрес (туннель cloudflared/ngrok или домен)
     web_dev_user_id: int = 0  # >0 — можно открыть мини-апп в обычном браузере без Telegram
 
+    @property
+    def single_bot(self) -> bool:
+        """Админка живёт в рабочем боте: ADMIN_BOT_TOKEN пустой или совпадает с рабочим."""
+
+        return not self.admin_bot_token or self.admin_bot_token in self.bot_tokens
+
 
 def load_config() -> Config:
     tokens = _split(os.getenv("BOT_TOKENS"))
@@ -57,8 +63,6 @@ def load_config() -> Config:
 
     if not cfg.bot_tokens:
         raise RuntimeError("В .env не задан BOT_TOKENS — нужен хотя бы один токен рабочего бота.")
-    if not cfg.admin_bot_token:
-        raise RuntimeError("В .env не задан ADMIN_BOT_TOKEN.")
     if not cfg.admin_ids:
         raise RuntimeError("В .env не задан ADMIN_IDS — иначе в админку никто не войдёт.")
 

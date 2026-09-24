@@ -149,6 +149,8 @@ async def on_start(
     sessionmaker: async_sessionmaker[AsyncSession],
     bot_map: dict[int, int],
     webapp_url: str = "",
+    single_bot: bool = False,
+    admin_ids: frozenset[int] = frozenset(),
 ) -> None:
     if message.from_user is None:
         return
@@ -172,6 +174,8 @@ async def on_start(
             name=message.from_user.first_name or "друг",
             ref_link=await settings_store.get(session, "ref_link"),
         )
+        if single_bot and message.from_user.id in admin_ids:
+            text += "\n\n🛠 Вы админ. Админка: /admin"
         await message.answer(
             text,
             disable_web_page_preview=True,
