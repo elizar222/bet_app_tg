@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import ChatJoinRequest, Message
+from aiogram.types import ChatJoinRequest, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
@@ -131,12 +131,24 @@ async def on_join_request(
             log.info("Промокод выдан: user=%s channel=%s bot=%s", user.tg_id, channel.title, bot.id)
 
 
+async def webapp_keyboard(session: AsyncSession, webapp_url: str) -> InlineKeyboardMarkup | None:
+    """Кнопка открытия мини-аппа. Telegram принимает только https-адреса."""
+
+    if not webapp_url.startswith("https://"):
+        return None
+    text = await settings_store.get(session, "webapp_button_text")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=webapp_url))]]
+    )
+
+
 @router.message(CommandStart())
 async def on_start(
     message: Message,
     bot: Bot,
     sessionmaker: async_sessionmaker[AsyncSession],
     bot_map: dict[int, int],
+    webapp_url: str = "",
 ) -> None:
     if message.from_user is None:
         return
@@ -160,7 +172,11 @@ async def on_start(
             name=message.from_user.first_name or "друг",
             ref_link=await settings_store.get(session, "ref_link"),
         )
-        await message.answer(text, disable_web_page_preview=True)
+        await message.answer(
+            text,
+            disable_web_page_preview=True,
+            reply_markup=await webapp_keyboard(session, webapp_url),
+        )
 
         offers = await messaging.build_offers_keyboard(session, user=user)
         if offers is not None:

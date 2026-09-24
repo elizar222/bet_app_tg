@@ -48,6 +48,10 @@ def main_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🤖 Боты", callback_data="bots"),
                 InlineKeyboardButton(text="📊 Статистика", callback_data="stats"),
             ],
+            [
+                InlineKeyboardButton(text="👑 VIP", callback_data="vip"),
+                InlineKeyboardButton(text="📱 Мини-апп", callback_data="webstats"),
+            ],
         ]
     )
 

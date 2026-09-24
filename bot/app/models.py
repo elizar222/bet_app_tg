@@ -153,3 +153,59 @@ class Broadcast(Base):
     blocked_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ── Мини-апп ─────────────────────────────────────────────────────────────────
+# Отдельные таблицы, а не новые колонки в users: create_all не умеет
+# добавлять колонки в уже существующую SQLite-базу.
+
+
+class WebProfile(Base):
+    """Профиль пользователя мини-аппа: уровень доступа и 1win ID."""
+
+    __tablename__ = "web_profiles"
+
+    tg_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    first_name: Mapped[str | None] = mapped_column(String(128))
+    username: Mapped[str | None] = mapped_column(String(64))
+    tier: Mapped[str] = mapped_column(String(16), default="base")  # base | vip
+    onewin_id: Mapped[str | None] = mapped_column(String(64))
+    start_bank: Mapped[float] = mapped_column(default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class HedgeCalc(Base):
+    """Каждый расчёт хеджа — для недельного лимита и статистики."""
+
+    __tablename__ = "hedge_calcs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    mode: Mapped[str] = mapped_column(String(16))
+    payout: Mapped[float] = mapped_column()
+    stake: Mapped[float] = mapped_column()
+    odds: Mapped[float] = mapped_column()
+    cashout: Mapped[float | None] = mapped_column()
+    hedge_amount: Mapped[float] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class TrackedBet(Base):
+    """Ставка, которую пользователь сам внёс в трекер."""
+
+    __tablename__ = "tracked_bets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    sport: Mapped[str] = mapped_column(String(32), default="Футбол")
+    league: Mapped[str | None] = mapped_column(String(64))
+    market: Mapped[str] = mapped_column(String(32), default="Исход")  # Исход | Тотал | Фора | Экспресс | ...
+    stake: Mapped[float] = mapped_column()
+    odds: Mapped[float] = mapped_column()
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | won | lost | void | hedged
+    payout: Mapped[float | None] = mapped_column()  # итоговая сумма на руки (для hedged/cashout)
+    hedge_saved: Mapped[float | None] = mapped_column()  # сколько хедж дал сверх выкупа
+    placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -10,14 +10,16 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 from sqlalchemy import select
 
 from app.admin.bot import build_admin_dispatcher
-from app.config import BASE_DIR, load_config
+from app.config import BASE_DIR, Config, load_config
 from app.db import close_db, init_db, session_factory
 from app.models import BotAccount
 from app.scheduler import build_scheduler
 from app.services.sender import sender
+from app import settings_store
 from app.settings_store import ensure_defaults, get_int
 from app.workers.handlers import router as worker_router
 
@@ -68,6 +70,36 @@ async def sync_bot_accounts(bots: list[Bot]) -> dict[int, int]:
     return mapping
 
 
+async def setup_menu_button(bots: list[Bot], cfg: Config, text: str) -> None:
+    """Кнопка мини-аппа слева от поля ввода в каждом рабочем боте."""
+
+    if not cfg.webapp_url.startswith("https://"):
+        if cfg.webapp_url:
+            log.warning("WEBAPP_URL должен начинаться с https:// — кнопка мини-аппа не установлена")
+        return
+    for bot in bots:
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text=text[:64] or "Терминал", web_app=WebAppInfo(url=cfg.webapp_url))
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.error("Не удалось поставить кнопку мини-аппа боту %s: %s", bot.id, exc)
+
+
+async def serve_web(cfg: Config) -> None:
+    import uvicorn
+
+    from app.web.api import build_app
+
+    app = build_app(cfg, session_factory())
+    server = uvicorn.Server(
+        uvicorn.Config(app, host=cfg.web_host, port=cfg.web_port, log_level="warning", access_log=False)
+    )
+    server.install_signal_handlers = lambda: None  # Ctrl+C обрабатывает run.py
+    log.info("Мини-апп: http://%s:%s  (публичный адрес: %s)", cfg.web_host, cfg.web_port, cfg.webapp_url or "не задан")
+    await server.serve()
+
+
 async def main() -> None:
     cfg = load_config()
     setup_logging(cfg.log_level)
@@ -84,7 +116,7 @@ async def main() -> None:
 
     worker_dp = Dispatcher(storage=MemoryStorage())
     worker_dp.include_router(worker_router)
-    worker_dp.workflow_data.update(sessionmaker=session_factory(), bot_map=bot_map)
+    worker_dp.workflow_data.update(sessionmaker=session_factory(), bot_map=bot_map, webapp_url=cfg.webapp_url)
 
     admin_dp = build_admin_dispatcher(cfg.admin_ids)
     admin_dp.workflow_data.update(sessionmaker=session_factory(), worker_bots=worker_bots)
@@ -92,10 +124,19 @@ async def main() -> None:
     scheduler = build_scheduler(session_factory(), worker_bots, cfg.timezone)
     scheduler.start()
 
+    async with session_factory()() as session:
+        button_text = await settings_store.get(session, "webapp_button_text")
+    await setup_menu_button(worker_bots, cfg, button_text)
+
     log.info("Запущено: %s рабочих ботов + админка", len(worker_bots))
+
+    tasks = []
+    if cfg.web_enabled:
+        tasks.append(serve_web(cfg))
 
     try:
         await asyncio.gather(
+            *tasks,
             worker_dp.start_polling(
                 *worker_bots,
                 allowed_updates=["message", "callback_query", "chat_join_request", "my_chat_member"],
