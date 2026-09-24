@@ -31,12 +31,33 @@ if not exist ".venv\Scripts\python.exe" (
   echo Первый запуск: готовлю окружение...
   %PY% -m venv .venv || (echo Не удалось создать окружение & pause & exit /b 1)
 )
-".venv\Scripts\python.exe" -m pip install -q --disable-pip-version-check -r requirements.txt || (
-  echo Не удалось установить библиотеки. Проверьте интернет.
-  pause
-  exit /b 1
+
+rem Библиотеки ставим только если их ещё нет или изменился requirements.txt
+if exist ".venv\installed.txt" (
+  fc /b requirements.txt ".venv\installed.txt" >nul 2>&1 && goto run
 )
 
+set "PIPOPT=-q --disable-pip-version-check --no-cache-dir --retries 10 --timeout 60"
+echo Устанавливаю библиотеки...
+if exist "wheels" (
+  ".venv\Scripts\python.exe" -m pip install %PIPOPT% --no-index --find-links wheels -r requirements.txt && goto installed
+)
+".venv\Scripts\python.exe" -m pip install %PIPOPT% -r requirements.txt && goto installed
+echo Связь с PyPI оборвалась, пробую ещё раз...
+".venv\Scripts\python.exe" -m pip install %PIPOPT% -r requirements.txt && goto installed
+echo Пробую зеркало PyPI...
+".venv\Scripts\python.exe" -m pip install %PIPOPT% -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt && goto installed
+".venv\Scripts\python.exe" -m pip install %PIPOPT% -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn -r requirements.txt && goto installed
+echo.
+echo Не удалось скачать библиотеки: соединение обрывается.
+echo Попробуйте включить или выключить VPN и запустить start.bat ещё раз.
+pause
+exit /b 1
+
+:installed
+copy /y requirements.txt ".venv\installed.txt" >nul
+
+:run
 echo.
 echo Запускаю бота и мини-апп. Чтобы остановить - закройте окно или нажмите Ctrl+C.
 echo.
