@@ -2,7 +2,7 @@
 
 import { api, state } from "../api.js";
 import { lineChart, ring, sparkline } from "../charts.js";
-import { esc, kickoff, money, odds, pct, signClass } from "../ui.js";
+import { countUp, esc, kickoff, money, odds, pct, signClass } from "../ui.js";
 import { cardHead, info, kpi, matchRow } from "./common.js";
 
 export async function renderHome(root) {
@@ -15,27 +15,27 @@ export async function renderHome(root) {
   const tip = feed.tipster;
 
   root.innerHTML = `
-    <section class="hello">
-      <div><span class="muted">Привет,</span> <b>${esc(me.first_name)}</b></div>
-      ${me.data_source === "demo" ? `<span class="chip n">Демо-данные матчей</span>` : ""}
+    <section class="hero">
+      <div class="hero-top">
+        <span class="eyebrow">${hasBets ? "Мой банк" : "Hedge Terminal"}</span>
+        ${me.data_source === "demo" ? `<span class="chip n">Демо-матчи</span>` : ""}
+      </div>
+      ${hasBets ? `
+        <div class="hero-num" data-readout="bank">${money(s.bank)}</div>
+        <div class="hero-sub">
+          <span class="chip ${p30.profit >= 0 ? "g" : "r"}">${p30.profit >= 0 ? "▲" : "▼"} ${money(Math.abs(p30.profit))}</span>
+          <span class="muted">за 30 дней · ROI <b class="${signClass(p30.roi)}">${pct(p30.roi, 1, true)}</b> · зашло ${pct(p30.win_rate)}</span>
+        </div>
+        <div class="hero-chart" data-chart="bank"></div>` : `
+        <div class="hero-title">Привет, ${esc(me.first_name)}.<br><span class="muted">Матчей в Live: ${data.live.length} · ставок с перевесом: ${feed.value.length}</span></div>`}
     </section>
 
-    <section class="card">
-      ${cardHead("Мой банк", `<a class="link" href="#/stats">Подробнее</a>`)}
-      ${hasBets ? `
-        <div class="bank-row">
-          <span class="big" data-readout="bank">${money(s.bank)}</span>
-          <span class="chip ${p30.profit >= 0 ? "g" : "r"}">${money(p30.profit, true)} · 30 дн</span>
-        </div>
-        <div data-chart="bank"></div>
-        <div class="kpis">
-          ${kpi("ROI 30 дн", pct(p30.roi, 1, true), signClass(p30.roi))}
-          ${kpi("Ставок", p30.bets)}
-          ${kpi("Зашло", pct(p30.win_rate))}
-        </div>` : `
-        <p class="muted">Добавьте ставки в трекер, и здесь появится график банка, ROI и процент зашедших ставок.</p>
-        <a class="btn ghost" href="#/stats?add=1">+ Добавить ставку</a>`}
-    </section>
+    <nav class="quick">
+      <a href="#/hedge"><i class="qi q-hedge"></i><span>Хедж</span></a>
+      <a href="#/matches"><i class="qi q-match"></i><span>Матчи</span></a>
+      <a href="#/stats?add=1"><i class="qi q-add"></i><span>Ставка</span></a>
+      <a href="#/bonuses"><i class="qi q-gift"></i><span>Бонусы</span></a>
+    </nav>
 
     ${data.pending.length ? `
     <section class="card">
@@ -112,8 +112,9 @@ export async function renderHome(root) {
 
   if (hasBets) {
     const values = s.curve.map((c) => c.v);
+    countUp(root.querySelector('[data-readout="bank"]'), s.bank, money);
     lineChart(root.querySelector('[data-chart="bank"]'), {
-      height: 110,
+      height: 120,
       series: [{ color: s.bank >= s.start_bank ? "var(--green)" : "var(--red)", values, area: true }],
       readout: root.querySelector('[data-readout="bank"]'),
       fmt: (i) => money(values[i]),

@@ -56,17 +56,24 @@ export function lineChart(host, opts) {
   }
 
   const dots = [];
-  opts.series.forEach((s) => {
+  const defs = svgEl("defs", {}, svg);
+  const uid = Math.random().toString(36).slice(2, 8);
+  opts.series.forEach((s, si) => {
     const pts = s.values.map((v, i) => (v == null ? null : [X(i), Y(v)])).filter(Boolean);
     if (!pts.length) return;
     const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join("");
     if (s.area) {
       const base = Y(opts.zero ? 0 : min);
-      svgEl("path", { d: `${d}L${pts.at(-1)[0]},${base}L${pts[0][0]},${base}Z`, fill: s.color, "fill-opacity": 0.1 }, svg);
+      const gid = `g${uid}${si}`;
+      const g = svgEl("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+      svgEl("stop", { offset: "0%", "stop-color": s.color, "stop-opacity": 0.32 }, g);
+      svgEl("stop", { offset: "100%", "stop-color": s.color, "stop-opacity": 0 }, g);
+      svgEl("path", { d: `${d}L${pts.at(-1)[0]},${base}L${pts[0][0]},${base}Z`, fill: `url(#${gid})`, class: "area" }, svg);
     }
-    svgEl("path", { d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    svgEl("path", { d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round", pathLength: 1, class: "line" }, svg);
     const last = pts.at(-1);
-    svgEl("circle", { cx: last[0], cy: last[1], r: 4, fill: s.color, class: "ring" }, svg);
+    svgEl("circle", { cx: last[0], cy: last[1], r: 7, fill: s.color, class: "halo" }, svg);
+    svgEl("circle", { cx: last[0], cy: last[1], r: 4, fill: s.color, class: "ring end" }, svg);
     dots.push(svgEl("circle", { r: 4.5, fill: s.color, class: "ring", opacity: 0 }, svg));
   });
 
@@ -108,7 +115,7 @@ export function sparkline(host, values, color) {
   host.innerHTML = "";
   const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "spark" }, host);
   const d = values.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1)).join("");
-  svgEl("path", { d, fill: "none", stroke: color, "stroke-width": 1.8, "stroke-linejoin": "round" }, svg);
+  svgEl("path", { d, fill: "none", stroke: color, "stroke-width": 1.8, "stroke-linejoin": "round", pathLength: 1, class: "line" }, svg);
   svgEl("circle", { cx: X(values.length - 1), cy: Y(values.at(-1)), r: 3, fill: color, class: "ring" }, svg);
 }
 
@@ -126,7 +133,8 @@ export function momentum(host, points, events, colors) {
     if (h < 0.5) continue;
     svgEl("rect", {
       x: X(p.m) - bw / 2, width: bw, y: p.v > 0 ? mid - h : mid, height: h,
-      rx: 1, fill: p.v > 0 ? colors.home : colors.away,
+      rx: 1, fill: p.v > 0 ? colors.home : colors.away, class: p.v > 0 ? "mbar up" : "mbar dn",
+      style: `animation-delay:${(p.m * 6)}ms`,
     }, svg);
   }
   for (const e of events || []) {

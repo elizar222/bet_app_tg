@@ -62,7 +62,7 @@ async function start() {
   if (tg) {
     tg.ready();
     tg.expand();
-    try { tg.setHeaderColor("#121212"); tg.setBackgroundColor("#121212"); } catch { /* старые клиенты */ }
+    try { tg.setHeaderColor("#0b0c0e"); tg.setBackgroundColor("#0b0c0e"); tg.setBottomBarColor?.("#0b0c0e"); } catch { /* старые клиенты */ }
     tg.BackButton?.onClick(() => (history.length > 1 ? history.back() : (location.hash = "#/matches")));
   }
   document.querySelectorAll(".nav a").forEach((a) => a.addEventListener("click", () => haptic()));
@@ -72,6 +72,12 @@ async function start() {
     view.innerHTML = `<div class="empty"><div class="empty-t">Нет доступа</div><p>Откройте терминал через кнопку в Telegram-боте.</p></div>`;
     return;
   }
+  const tier = document.getElementById("tier");
+  const me = (await import("./api.js")).state.me;
+  tier.textContent = me.tier === "vip" ? "VIP" : "BASE";
+  tier.classList.toggle("vip", me.tier === "vip");
+  tier.hidden = false;
+  tier.addEventListener("click", () => (location.hash = "#/bonuses"));
   window.addEventListener("hashchange", render);
   render();
 }

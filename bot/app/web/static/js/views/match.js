@@ -2,7 +2,7 @@
 
 import { api } from "../api.js";
 import { compareRows, lineChart, momentum, probBar, scoreHeatmap } from "../charts.js";
-import { esc, kickoff, odds, pct, segmented, onSeg } from "../ui.js";
+import { clubColors, crest, esc, kickoff, odds, pct, segmented, onSeg } from "../ui.js";
 import { cardHead, formChips, info, kpi, legend } from "./common.js";
 
 const C = { home: "var(--c-home)", draw: "var(--c-draw)", away: "var(--c-away)" };
@@ -17,13 +17,13 @@ export async function renderMatch(root, id) {
   if (live && lastTab === "overview") lastTab = "live";
 
   root.innerHTML = `
-    <section class="card match-head">
+    <section class="card match-head" style="--ha:${clubColors(m.home.name)[0]};--aa:${clubColors(m.away.name)[0]}">
       <div class="mh-meta"><span>${esc(m.country)} · ${esc(m.league)}</span>
         ${live ? `<span class="chip r"><span class="live-dot"></span>${m.live.minute}'</span>` : `<span class="muted">${esc(kickoff(m.kickoff))}</span>`}</div>
       <div class="mh-teams">
-        <div class="mh-team"><span class="crest" style="--c:${C.home}">${esc(m.home.short)}</span><b>${esc(m.home.name)}</b></div>
-        <div class="mh-score">${live ? esc(m.live.score) : "—"}</div>
-        <div class="mh-team"><span class="crest" style="--c:${C.away}">${esc(m.away.short)}</span><b>${esc(m.away.name)}</b></div>
+        <div class="mh-team">${crest(m.home.name, m.home.short, "lg")}<b>${esc(m.home.name)}</b></div>
+        <div class="mh-score">${live ? esc(m.live.score) : `<span class="vs">VS</span><small>${esc(kickoff(m.kickoff))}</small>`}</div>
+        <div class="mh-team">${crest(m.away.name, m.away.short, "lg")}<b>${esc(m.away.name)}</b></div>
       </div>
       <div class="oddsbox wide">
         ${[["home", "П1"], ["draw", "X"], ["away", "П2"]].map(([k, l]) =>
@@ -235,9 +235,9 @@ function stats(host, m) {
         { name: "Владение, %", home: h.possession, away: a.possession },
       ])}
       <div class="kpis">
-        ${kpi("Угловых всего", (h.corners + a.corners).toFixed(1))}
-        ${kpi("Карточек всего", (h.cards + a.cards).toFixed(1))}
-        ${kpi("Ударов всего", Math.round(h.shots + a.shots))}
+        ${kpi("Угловые Σ", (h.corners + a.corners).toFixed(1))}
+        ${kpi("Карточки Σ", (h.cards + a.cards).toFixed(1))}
+        ${kpi("Удары Σ", Math.round(h.shots + a.shots))}
       </div>
     </section>
 

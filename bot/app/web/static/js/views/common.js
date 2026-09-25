@@ -1,6 +1,6 @@
 // Компоненты, которые используются на нескольких экранах.
 
-import { esc, kickoff, odds, pct, FORM_LABEL } from "../ui.js";
+import { crest, esc, kickoff, odds, pct, FORM_LABEL } from "../ui.js";
 import { probBar } from "../charts.js";
 
 export function matchRow(m, { showLeague = false } = {}) {
@@ -18,8 +18,8 @@ export function matchRow(m, { showLeague = false } = {}) {
     </div>
     <div class="mrow-main">
       <div class="teams">
-        <div><span>${esc(m.home.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[0])}</b>` : ""}</div>
-        <div><span>${esc(m.away.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[1])}</b>` : ""}</div>
+        <div>${crest(m.home.name, m.home.short, "sm")}<span>${esc(m.home.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[0])}</b>` : ""}</div>
+        <div>${crest(m.away.name, m.away.short, "sm")}<span>${esc(m.away.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[1])}</b>` : ""}</div>
       </div>
       <div class="oddsbox">
         <span><small>П1</small>${odds(o.home)}</span>

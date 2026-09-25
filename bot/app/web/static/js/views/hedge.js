@@ -2,7 +2,7 @@
 
 import { api, state, ApiError } from "../api.js";
 import { hedgeChart } from "../charts.js";
-import { esc, haptic, money, odds as fo, openLink, pct, segmented, onSeg, sheet, toast } from "../ui.js";
+import { countUp, esc, haptic, money, odds as fo, openLink, pct, segmented, onSeg, sheet, toast } from "../ui.js";
 import { cardHead, info, legend } from "./common.js";
 import { vipSheet } from "./vip.js";
 
@@ -132,7 +132,7 @@ export async function renderHedge(root, params) {
 
 function liveOdds(m) {
   const o = m.live?.odds || m.odds;
-  const dc = (a, b) => (1 / (1 / a + 1 / b)).toFixed(2);
+  const dc = (a, b) => Math.max(1.01, 1 / (1 / a + 1 / b)).toFixed(2);
   const opts = [
     ["П1", o.home], ["X", o.draw], ["П2", o.away],
     ["1X", dc(o.home, o.draw)], ["X2", dc(o.draw, o.away)], ["12", dc(o.home, o.away)],
@@ -162,13 +162,15 @@ function showResult(host, r) {
   host.innerHTML = `
     <section class="card result">
       ${cardHead("Результат · " + modeName)}
-      <span class="muted">Поставьте на противоположный исход</span>
-      <div class="big">${money(r.hedge_amount)}</div>
+      <div class="res-hero">
+        <span class="muted">${r.mode === "zero" ? "Максимум, если купон зайдёт" : "Гарантированная прибыль"}</span>
+        <div class="res-num pos" data-res>${money(r.mode === "zero" ? r.profit_if_bet_wins : r.guaranteed, true)}</div>
+      </div>
+      <div class="res-stake"><span>Поставьте на противоположный исход</span><b>${money(r.hedge_amount)}</b></div>
       <div class="outcomes">
         <div><span class="muted">Если купон зашёл</span><b class="${r.profit_if_bet_wins >= 0 ? "pos" : "neg"}">${money(r.profit_if_bet_wins, true)}</b></div>
         <div><span class="muted">Если зашёл хедж</span><b class="${r.profit_if_hedge_wins >= 0 ? "pos" : "neg"}">${money(r.profit_if_hedge_wins, true)}</b></div>
       </div>
-      ${r.mode === "equal" ? `<div class="kv"><span class="muted">Гарантированно при любом исходе</span><b class="pos">${money(r.guaranteed, true)}</b></div>` : ""}
       <div class="kv"><span class="muted">Шанс, что купон зайдёт (по линии)</span><b>${pct(r.implied_prob_bet)}</b></div>
     </section>
 
@@ -199,6 +201,11 @@ function showResult(host, r) {
     readout: host.querySelector("[data-ro]"),
     fmt: (h, a, b) => `Хедж <b>${money(h)}</b> · купон <b class="${a >= 0 ? "pos" : "neg"}">${money(a, true)}</b> · хедж <b class="${b >= 0 ? "pos" : "neg"}">${money(b, true)}</b>`,
   });
+  const resEl = host.querySelector("[data-res]");
+  const target = r.mode === "zero" ? r.profit_if_bet_wins : r.guaranteed;
+  countUp(resEl, target, (v) => money(v, true));
+  resEl.classList.toggle("pos", target >= 0);
+  resEl.classList.toggle("neg", target < 0);
   host.querySelector("[data-go]").addEventListener("click", () => openLink(me.ref_link));
   host.scrollIntoView({ behavior: "smooth", block: "start" });
 }
