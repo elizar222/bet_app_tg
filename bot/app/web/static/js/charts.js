@@ -211,7 +211,7 @@ export function hedgeChart(host, { payout, stake, odds, amount, readout, fmt }) 
   if (!svg) return;
   const W = 340, L = 38, R = 8;
   const X = (h) => L + (h / maxH) * (W - L - R);
-  [[eq, "Поровну"], [zr, "Возврат ставки"]].forEach(([h, t]) => {
+  [[eq, "Поровну"], [zr, "Без риска"]].forEach(([h, t]) => {
     const x = X(h);
     svgEl("line", { x1: x, x2: x, y1: 10, y2: 150, class: "mark" }, svg);
     svgEl("text", { x: x + 3, y: 20, class: "tick mark-t" }, svg).textContent = t;

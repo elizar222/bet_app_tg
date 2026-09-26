@@ -513,4 +513,3 @@ p { margin: 0; }
 .myrow { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px; gap: 8px; align-items: center; font-size: 13px; padding: 6px 0; border-top: 1px solid var(--line); }
 .myrow > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .myrow .chip { justify-self: end; }
-.disclaimer { font-size: 11px; line-height: 1.5; color: var(--muted); text-align: center; padding: 4px 12px 0; }

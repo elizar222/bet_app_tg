@@ -340,7 +340,7 @@ def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession], notif
                                  "text": await settings_store.get(session, "vip_text")}, status_code=402)
         if not quota["vip"] and body.mode != "equal":
             return JSONResponse({"gate": True, "quota": quota, "mode_locked": True,
-                                 "text": "Режимы «Возврат ставки» и «Свой %» доступны в VIP."}, status_code=402)
+                                 "text": "Режимы «Без риска» и «Свой %» доступны в VIP."}, status_code=402)
         result = hedge.calculate(payout=body.payout, stake=body.stake, odds=body.odds,
                                  mode=body.mode, ratio=body.ratio, cashout=body.cashout)
         session.add(HedgeCalc(tg_id=user.id, mode=body.mode, payout=body.payout, stake=body.stake,
