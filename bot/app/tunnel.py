@@ -24,7 +24,9 @@ from app.config import BASE_DIR
 log = logging.getLogger("tunnel")
 
 TOOLS_DIR = BASE_DIR / "tools"
-URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+URL_RE = re.compile(r"https://([a-z0-9-]+)\.trycloudflare\.com")
+# служебные адреса Cloudflare, которые тоже попадают в лог, — это не наш туннель
+SERVICE_HOSTS = {"api", "www", "dash"}
 RELEASES = "https://github.com/cloudflare/cloudflared/releases/latest/download/"
 
 
@@ -89,16 +91,38 @@ class Tunnel:
         if not found:
             log.error("cloudflared не выдал адрес за %s с — проверь интернет", timeout)
             return None
+        # новый адрес начинает открываться не сразу — ждём, пока через него ответит наш сервер
+        if await asyncio.to_thread(self._wait_ready, 60):
+            log.info("Туннель работает: %s", self.url)
+        else:
+            log.warning("Туннель %s пока не отвечает — мини-апп может открыться через минуту", self.url)
         return self.url
+
+    def _wait_ready(self, timeout: float) -> bool:
+        import json
+        import time
+        import urllib.request
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(self.url + "/healthz", timeout=8) as resp:
+                    if json.loads(resp.read().decode()).get("ok"):
+                        return True
+            except Exception:  # noqa: BLE001 — DNS ещё не разошёлся, пробуем снова
+                pass
+            time.sleep(3)
+        return False
 
     def _read_log(self) -> None:
         assert self.proc and self.proc.stderr
         for raw in self.proc.stderr:
             if self.url is None:
-                match = URL_RE.search(raw.decode(errors="ignore"))
-                if match:
-                    self.url = match.group(0)
-                    self._found.set()
+                for match in URL_RE.finditer(raw.decode(errors="ignore")):
+                    if match.group(1) not in SERVICE_HOSTS:
+                        self.url = match.group(0)
+                        self._found.set()
+                        break
 
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:
