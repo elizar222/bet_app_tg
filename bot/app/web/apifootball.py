@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import ApiCache, OddsSnapshot
 from app.web import analytics, model
+from app.web.search import team_ru
 
 log = logging.getLogger("apifootball")
 
@@ -93,6 +94,7 @@ class ApiFootballProvider:
         self._model_memo: dict[tuple, dict] = {}
         self._loaded: tuple[datetime, list[dict]] | None = None
         self._load_lock = asyncio.Lock()
+        self._index: dict[int, dict] = {}
 
     # ── HTTP и кэш ─────────────────────────────────────────────────────────
     def _ttl(self, kind: str) -> int:
@@ -134,10 +136,10 @@ class ApiFootballProvider:
             await s.commit()
 
     async def get(self, path: str, params: dict, kind: str, *, optional: bool = False,
-                  cache_only: bool = False, keep=None) -> list:
+                  cache_only: bool = False, keep=None, shape=None, tag: str = "") -> list:
         """Запрос с кэшем. Возвращает поле response или [] / устаревший кэш при ошибке."""
 
-        key = path + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        key = path + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items())) + (f"#{tag}" if tag else "")
         lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
             cached = await self._cached(key)
@@ -184,6 +186,8 @@ class ApiFootballProvider:
             if keep is not None:
                 # храним только нужное: ответ «все матчи дня» весит мегабайты
                 data = [row for row in data if keep(row)]
+            if shape is not None:
+                data = [shape(row) for row in data]
             await self._store(key, data)
             return data
 
@@ -193,14 +197,9 @@ class ApiFootballProvider:
 
     async def _fixtures(self) -> list[dict]:
         out: dict[int, dict] = {}
-        ours = lambda r: r.get("league", {}).get("id") in self.leagues  # noqa: E731
-        for day in range(LOOKAHEAD_DAYS):
-            # в перерывы на сборные топ-лиги не играют — смотрим на несколько дней вперёд
-            rows = await self.get("/fixtures", {"date": self._local_date(day), "timezone": "UTC"},
-                                  "fixtures" if day < 2 else "fixtures_later", keep=ours)
-            for r in rows:
-                if r.get("league", {}).get("id") in self.leagues:
-                    out[r["fixture"]["id"]] = r
+        for row in await self._day_index():
+            if row.get("league", {}).get("id") in self.leagues:
+                out[row["fixture"]["id"]] = row
         # Live-счёт свежее, чем расписание: если сейчас что-то идёт — обновляем
         now = datetime.now(timezone.utc)
         maybe_live = any(
@@ -210,10 +209,70 @@ class ApiFootballProvider:
             for r in out.values()
         )
         if maybe_live:
-            live = await self.get("/fixtures", {"live": "-".join(map(str, self.leagues))}, "live")
-            for r in live:
-                out[r["fixture"]["id"]] = r
+            # один запрос «все Live» — его же использует поиск
+            for r in await self.get("/fixtures", {"live": "all"}, "live", shape=self._slim, tag="all"):
+                self._index[r["fixture"]["id"]] = r
+                if r["league"]["id"] in self.leagues:
+                    out[r["fixture"]["id"]] = r
         return list(out.values())
+
+    @staticmethod
+    def _slim(r: dict) -> dict:
+        """Только нужные поля матча: полный ответ «все матчи дня» весит мегабайты."""
+
+        fx, lg, tm = r.get("fixture", {}), r.get("league", {}), r.get("teams", {})
+        return {
+            "fixture": {"id": fx.get("id"), "date": fx.get("date"), "referee": fx.get("referee"),
+                        "status": {"short": (fx.get("status") or {}).get("short"),
+                                   "elapsed": (fx.get("status") or {}).get("elapsed")}},
+            "league": {"id": lg.get("id"), "name": lg.get("name"), "country": lg.get("country"),
+                       "season": lg.get("season"), "flag": lg.get("flag")},
+            "teams": {side: {"id": (tm.get(side) or {}).get("id"), "name": (tm.get(side) or {}).get("name"),
+                             "logo": (tm.get(side) or {}).get("logo")} for side in ("home", "away")},
+            "goals": r.get("goals") or {},
+        }
+
+    async def _day_index(self) -> list[dict]:
+        """Все матчи всех лиг на ближайшие дни — для поиска и для списка наших лиг."""
+
+        rows: list[dict] = []
+        for day in range(LOOKAHEAD_DAYS):
+            # в перерывы на сборные топ-лиги не играют — смотрим на неделю вперёд
+            rows += await self.get("/fixtures", {"date": self._local_date(day), "timezone": "UTC"},
+                                   "fixtures" if day < 2 else "fixtures_later", shape=self._slim, tag="all")
+        self._index = {r["fixture"]["id"]: r for r in rows}
+        return rows
+
+    async def search(self, query: str, limit: int = 30) -> list[dict]:
+        from app.web.search import score
+
+        rows = await self._day_index()
+        if self._maybe_live(rows):
+            for r in await self.get("/fixtures", {"live": "all"}, "live", shape=self._slim, tag="all"):
+                self._index[r["fixture"]["id"]] = r
+            rows = list(self._index.values())
+        found = []
+        for r in rows:
+            st = (r["fixture"]["status"] or {}).get("short")
+            if st in DONE_STATUSES:
+                continue
+            sc = score(query, r["teams"]["home"]["name"] or "", r["teams"]["away"]["name"] or "",
+                       r["league"].get("name") or "", r["league"].get("country") or "")
+            if sc >= 0.72:
+                found.append((sc, r))
+        found.sort(key=lambda x: (-round(x[0], 1), x[1]["fixture"]["status"]["short"] not in LIVE_STATUSES,
+                                  x[1]["fixture"]["date"]))
+        return [analytics.summary(self._base(r)) for _, r in found[:limit]]
+
+    @staticmethod
+    def _maybe_live(rows: list[dict]) -> bool:
+        now = datetime.now(timezone.utc)
+        return any(
+            r["fixture"]["status"]["short"] in LIVE_STATUSES
+            or (r["fixture"]["status"]["short"] == "NS"
+                and now - timedelta(hours=2) <= datetime.fromisoformat(r["fixture"]["date"]) <= now)
+            for r in rows
+        )
 
     async def _odds_for(self, rows: list[dict]) -> dict[int, dict]:
         """Кэфы до матча: одним запросом на лигу и день."""
@@ -300,13 +359,18 @@ class ApiFootballProvider:
         fx, lg, teams, goals = r["fixture"], r["league"], r["teams"], r.get("goals") or {}
         st = fx["status"]["short"]
         status = "live" if st in LIVE_STATUSES else "finished" if st in DONE_STATUSES else "scheduled"
-        league, country = LEAGUES_RU.get(lg["id"], (lg.get("name"), lg.get("country")))
+        if lg["id"] in LEAGUES_RU:
+            league, country = LEAGUES_RU[lg["id"]]
+        else:
+            from app.web.search import league_ru
+
+            league, country = league_ru(lg.get("name") or "", lg.get("country") or "")
         m = {
             "id": fx["id"], "league": league, "country": country, "league_id": lg["id"], "season": lg.get("season"),
             "kickoff": fx["date"], "status": status,
-            "home": {"id": teams["home"]["id"], "name": teams["home"]["name"], "short": _short(teams["home"]["name"]),
+            "home": {"id": teams["home"]["id"], "name": team_ru(teams["home"]["name"]), "short": _short(teams["home"]["name"]),
                      "logo": teams["home"].get("logo")},
-            "away": {"id": teams["away"]["id"], "name": teams["away"]["name"], "short": _short(teams["away"]["name"]),
+            "away": {"id": teams["away"]["id"], "name": team_ru(teams["away"]["name"]), "short": _short(teams["away"]["name"]),
                      "logo": teams["away"].get("logo")},
             "referee_name": (fx.get("referee") or "").split(",")[0] or None,
             "odds": {}, "odds_history": [], "model": None,
@@ -455,10 +519,16 @@ class ApiFootballProvider:
         matches = await self._load()
         m = next((x for x in matches if x["id"] == match_id), None)
         if m is None:
-            rows = await self.get("/fixtures", {"id": match_id}, "fixtures")
-            if not rows:
+            row = self._index.get(match_id)
+            if row is None:
+                await self._day_index()
+                row = self._index.get(match_id)
+            if row is None:
+                rows = await self.get("/fixtures", {"id": match_id}, "fixtures", shape=self._slim)
+                row = rows[0] if rows else None
+            if row is None:
                 return None
-            m = self._base(rows[0])
+            m = self._base(row)
         if m.get("source") != "oddspapi":
             await self._enrich(m)
         else:

@@ -68,7 +68,7 @@ function overview(host, m) {
         </div>`;
       }).join("")}
       ${a.margin != null ? `<div class="kv"><span class="muted">Маржа букмекера${m.bookmaker ? ` · ${esc(m.bookmaker)}` : ""}</span><b>${pct(a.margin, 1)}</b></div>` : ""}
-    </section>` : `<section class="card">${cardHead("Вероятности исходов")}${note("Букмекеры ещё не выставили линию на этот матч.")}</section>`;
+    </section>` : `<section class="card">${cardHead("Вероятности исходов")}${note("Линии Pinnacle на этот матч нет. Впишите кэфы 1win выше — приложение посчитает шансы и маржу.")}</section>`;
 
   const valueCard = a.value?.length ? `
     <section class="card">
@@ -92,7 +92,7 @@ function overview(host, m) {
       </div>
     </section>` : "";
 
-  host.innerHTML = probsCard + valueCard + bestCard + (mk ? `
+  host.innerHTML = myOddsCard(m) + probsCard + valueCard + bestCard + (mk ? `
     <section class="card">
       ${cardHead("Ожидаемый счёт", info("Сколько голов в среднем должна забить каждая команда, и вероятность каждого точного счёта в процентах."))}
       <div class="xg-big">
@@ -110,6 +110,66 @@ function overview(host, m) {
       ${o.over25 ? `<div class="kv"><span class="muted">Кэф ТБ 2.5 / ТМ 2.5</span><b>${odds(o.over25)} / ${odds(o.under25)}</b></div>` : ""}
     </section>` : "");
   if (mk) scoreHeatmap(host.querySelector("[data-heat]"), mk.matrix, m.home.short, m.away.short);
+  mountMyOdds(host, m);
+}
+
+// ── Кэфы пользователя с 1win ─────────────────────────────────────────────────
+const storeKey = (m) => `odds1w:${m.id}`;
+function loadMy(m) {
+  try { return JSON.parse(localStorage.getItem(storeKey(m)) || "{}"); } catch { return {}; }
+}
+function saveMy(m, v) {
+  try { localStorage.setItem(storeKey(m), JSON.stringify(v)); } catch { /* приватный режим */ }
+}
+
+function myOddsCard(m) {
+  const v = loadMy(m);
+  const field = (k, l) => `<label class="myodd"><span>${l}</span><input data-my="${k}" type="number" inputmode="decimal" step="0.01" min="1.01" placeholder="—" value="${v[k] ?? ""}"></label>`;
+  return `
+    <section class="card myodds">
+      ${cardHead("Кэфы 1win", info("Впишите кэфы, которые видите на 1win для этого матча. Приложение покажет маржу 1win, реальные шансы и сравнит с линией Pinnacle — самого точного букмекера. Зелёный процент значит, что 1win даёт на этот исход выгодную цену."))}
+      <div class="myodds-row">${field("home", "П1")}${field("draw", "X")}${field("away", "П2")}</div>
+      <div data-myres></div>
+    </section>`;
+}
+
+function mountMyOdds(host, m) {
+  const res = host.querySelector("[data-myres]");
+  const inputs = [...host.querySelectorAll("[data-my]")];
+  const pin = hasOdds(m.odds) ? m.odds : null;
+  const pinFair = pin ? (() => { const t = 1 / pin.home + 1 / pin.draw + 1 / pin.away; return { home: 1 / pin.home / t, draw: 1 / pin.draw / t, away: 1 / pin.away / t }; })() : null;
+  const draw = () => {
+    const v = {};
+    inputs.forEach((i) => { const x = parseFloat(String(i.value).replace(",", ".")); if (x > 1) v[i.dataset.my] = x; });
+    saveMy(m, v);
+    if (!(v.home && v.draw && v.away)) {
+      res.innerHTML = `<p class="hint">Введите все три кэфа — П1, X и П2.</p>`;
+      return;
+    }
+    const book = 1 / v.home + 1 / v.draw + 1 / v.away;
+    const fair = { home: 1 / v.home / book, draw: 1 / v.draw / book, away: 1 / v.away / book };
+    const ref = pinFair || (m.model ? { home: m.model.home, draw: m.model.draw, away: m.model.away } : null);
+    const refName = pinFair ? "Pinnacle" : "нашей модели";
+    const names = { home: m.home.name, draw: "Ничья", away: m.away.name };
+    res.innerHTML = `
+      <div class="kv"><span class="muted">Маржа 1win</span><b class="${book - 1 > 0.08 ? "neg" : ""}">${pct(book - 1, 1)}</b></div>
+      ${OUT.map(([k, l]) => {
+        const edge = ref ? ref[k] * v[k] - 1 : null;
+        return `<div class="myrow">
+          <span><b>${l}</b> <span class="muted">${esc(names[k])}</span></span>
+          <span class="num">шанс ${pct(fair[k])}</span>
+          ${edge == null ? "" : `<span class="chip ${edge > 0.01 ? "g" : edge < -0.04 ? "r" : "n"}">${pct(edge, 1, true)}</span>`}
+        </div>`;
+      }).join("")}
+      ${ref ? `<p class="hint">Процент — выгода кэфа 1win по сравнению с ${refName}. ${
+        OUT.some(([k]) => ref[k] * v[k] - 1 > 0.01)
+          ? "Есть исход с выгодной ценой — он отмечен зелёным."
+          : "Выгодных цен нет: 1win даёт кэфы ниже честных."}</p>`
+        : `<p class="hint">Для сравнения нет линии Pinnacle на этот матч — показаны шансы по кэфам 1win без маржи.</p>`}
+      <a class="btn" href="#/hedge?odds=${v.away}">Открыть хедж-калькулятор</a>`;
+  };
+  inputs.forEach((i) => i.addEventListener("input", draw));
+  draw();
 }
 
 function oddsTab(host, m) {

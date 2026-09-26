@@ -4,6 +4,7 @@ import { api, state } from "../api.js";
 import { lineChart, ring, sparkline } from "../charts.js";
 import { countUp, esc, kickoff, money, odds, pct, signClass } from "../ui.js";
 import { cardHead, info, kpi, matchRow } from "./common.js";
+import { mountSearch, searchBox } from "./search.js";
 
 export async function renderHome(root) {
   const data = await api("/api/home");
@@ -29,6 +30,8 @@ export async function renderHome(root) {
         <div class="hero-chart" data-chart="bank"></div>` : `
         <div class="hero-title">Привет, ${esc(me.first_name)}.<br><span class="muted">Матчей в Live: ${data.live.length} · ставок с перевесом: ${feed.value.length}</span></div>`}
     </section>
+
+    ${searchBox()}
 
     <nav class="quick">
       <a href="#/hedge"><i class="qi q-hedge"></i><span>Хедж</span></a>
@@ -111,6 +114,7 @@ export async function renderHome(root) {
     </section>
   `;
 
+  mountSearch(root);
   if (hasBets) {
     const values = s.curve.map((c) => c.v);
     countUp(root.querySelector('[data-readout="bank"]'), s.bank, money);

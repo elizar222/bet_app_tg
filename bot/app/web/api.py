@@ -316,6 +316,13 @@ def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession], notif
     async def matches(_: TgUser = Depends(current_user)) -> dict:
         return {"matches": await run(provider.list_matches())}
 
+    @app.get("/api/search")
+    async def search(q: str = "", _: TgUser = Depends(current_user)) -> dict:
+        q = q.strip()[:80]
+        if len(q) < 2:
+            return {"results": [], "query": q}
+        return {"results": await run(provider.search(q)), "query": q}
+
     @app.get("/api/matches/{match_id}")
     async def match(match_id: int, _: TgUser = Depends(current_user)) -> dict:
         data = await run(provider.get_match(match_id))

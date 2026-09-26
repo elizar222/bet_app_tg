@@ -345,6 +345,15 @@ class DemoProvider:
         self._ensure()
         return analytics.feed(self._matches, self._tipster())
 
+    def search(self, query: str, limit: int = 30) -> list[dict]:
+        from app.web.search import score
+
+        self._ensure()
+        found = [(score(query, m["home"]["name"], m["away"]["name"], m["league"], m["country"]), m) for m in self._matches]
+        found = [x for x in found if x[0] >= 0.72]
+        found.sort(key=lambda x: -x[0])
+        return [self._summary(m) for _, m in found[:limit]]
+
     def _tipster(self) -> dict:
         """Статистика прогнозов канала за 30 дней (демо)."""
 

@@ -3,6 +3,7 @@
 import { api } from "../api.js";
 import { esc, segmented, onSeg, empty, haptic } from "../ui.js";
 import { matchRow } from "./common.js";
+import { mountSearch, searchBox } from "./search.js";
 
 const view = { filter: "all", league: "Все" };
 
@@ -12,6 +13,7 @@ export async function renderMatches(root) {
 
   root.innerHTML = `
     <h1 class="title">Матчи</h1>
+    ${searchBox()}
     ${segmented("filter", [["all", "Все"], ["live", "Live"], ["today", "Сегодня"], ["value", "Value"]], view.filter)}
     <div class="chips-scroll">${leagues
       .map((l) => `<button type="button" class="lchip ${l === view.league ? "on" : ""}" data-league="${esc(l)}">${esc(l)}</button>`)
@@ -45,6 +47,7 @@ export async function renderMatches(root) {
       </section>`).join("");
   };
 
+  mountSearch(root);
   onSeg(root, "filter", (v) => { view.filter = v; draw(); });
   root.querySelectorAll("[data-league]").forEach((b) => b.addEventListener("click", () => {
     view.league = b.dataset.league;
