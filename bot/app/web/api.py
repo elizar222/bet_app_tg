@@ -200,8 +200,13 @@ def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession], notif
     if cfg.apifootball_key:
         from app.web.apifootball import ApiFootballProvider
 
+        oddspapi = None
+        if cfg.oddspapi_key:
+            from app.web.oddspapi import OddsPapiClient
+
+            oddspapi = OddsPapiClient(cfg.oddspapi_key, sessionmaker)
         provider = ApiFootballProvider(cfg.apifootball_key, sessionmaker, leagues=list(cfg.apifootball_leagues) or None,
-                                       plan=cfg.apifootball_plan, tz=cfg.timezone)
+                                       plan=cfg.apifootball_plan, tz=cfg.timezone, oddspapi=oddspapi)
     else:
         provider = DemoProvider()
     app.state.provider = provider

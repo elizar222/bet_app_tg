@@ -76,8 +76,11 @@ class ApiFootballProvider:
     name = "api-football"
 
     def __init__(self, key: str, sessionmaker: async_sessionmaker[AsyncSession], *,
-                 leagues: list[int] | None = None, plan: str = "free", tz: str = "Europe/Moscow") -> None:
+                 leagues: list[int] | None = None, plan: str = "free", tz: str = "Europe/Moscow",
+                 oddspapi=None) -> None:
         self.key = key
+        self.op = oddspapi  # OddsPapiClient: кэфы Pinnacle, когда API-Football их не отдаёт
+        self.restricted: set[str] | None = None  # запросы, закрытые на тарифе (запоминаем, чтобы не тратить лимит)
         self.sm = sessionmaker
         self.leagues = leagues or DEFAULT_LEAGUES
         self.pro = plan.lower() != "free"
@@ -140,6 +143,12 @@ class ApiFootballProvider:
             cached = await self._cached(key)
             if cache_only:
                 return cached[1] if cached else []  # type: ignore[return-value]
+            sig = path + ":" + ",".join(sorted(params))
+            if self.restricted is None:
+                item = await self._cached("af:restricted")
+                self.restricted = set(item[1]) if item else set()
+            if sig in self.restricted:
+                return cached[1] if cached else []  # type: ignore[return-value]
             now = datetime.now(timezone.utc)
             if cached and (now - cached[0]).total_seconds() < self._ttl(kind):
                 return cached[1]  # type: ignore[return-value]
@@ -166,6 +175,10 @@ class ApiFootballProvider:
                     # лимит исчерпан или ключ неверный — не долбим API до конца суток / 10 минут
                     tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=1, second=0, microsecond=0)
                     self.blocked_until = tomorrow if "limit" in text else now + timedelta(minutes=10)
+                elif "do not have access" in text or "free plans" in text:
+                    # запрос закрыт на этом тарифе — больше его не делаем (до смены тарифа)
+                    self.restricted.add(sig)
+                    await self._store("af:restricted", sorted(self.restricted))
                 return cached[1] if cached else []  # type: ignore[return-value]
             data = body.get("response", []) if isinstance(body, dict) else []
             if keep is not None:
@@ -336,8 +349,61 @@ class ApiFootballProvider:
                                       optional=True, cache_only=not self.pro or m["status"] != "scheduled")
                 m["model"] = self._model_from_prediction(pred[0] if pred else None) or self._model_from_odds(m["odds"])
             matches.append(m)
+        await self._add_oddspapi(matches)
         matches.sort(key=lambda m: (m["status"] != "live", m["kickoff"]))
         return matches
+
+    async def _add_oddspapi(self, matches: list[dict]) -> None:
+        """Кэфы Pinnacle для матчей без кэфов + ближайшие матчи, которых нет в расписании API-Football."""
+
+        if self.op is None:
+            return
+        from app.web.oddspapi import TOURNAMENTS, parse_time
+
+        now = datetime.now(timezone.utc)
+        new_odds: dict[int, dict] = {}
+        for league_id in self.leagues:
+            tid = TOURNAMENTS.get(league_id)
+            if not tid:
+                continue
+            league_matches = [m for m in matches if m["league_id"] == league_id and m["status"] == "scheduled"]
+            active = any(datetime.fromisoformat(m["kickoff"]) - now < timedelta(days=3) for m in league_matches)
+            try:
+                rows = await self.op.tournament_odds(tid, active or not league_matches)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("OddsPapi турнир %s: %s", tid, exc)
+                continue
+            paired, extra = self.op.match(league_matches, rows)
+            for m in league_matches:
+                r = paired.get(m["id"])
+                if r and not m["odds"]:
+                    m["odds"], m["bookmaker"], m["bookmaker_url"] = dict(r["odds"]), "Pinnacle", r.get("url")
+                    new_odds[m["id"]] = m["odds"]
+            # матчи, которых нет в окне API-Football (например, после паузы на сборные)
+            league, country = LEAGUES_RU.get(league_id, (str(league_id), ""))
+            for r in extra:
+                start = parse_time(r.get("start"))
+                if not start or start < now or start - now > timedelta(days=21) or not (r["home"] and r["away"]):
+                    continue
+                mid = int("".join(ch for ch in str(r["fixture_id"]) if ch.isdigit()) or 0)
+                if not mid:
+                    continue
+                m = {
+                    "id": mid, "league": league, "country": country, "league_id": league_id, "season": None,
+                    "kickoff": start.isoformat(), "status": "scheduled", "source": "oddspapi",
+                    "home": {"id": None, "name": r["home"], "short": _short(r["home"]), "logo": None},
+                    "away": {"id": None, "name": r["away"], "short": _short(r["away"]), "logo": None},
+                    "referee_name": None, "odds": dict(r["odds"]), "bookmaker": "Pinnacle",
+                    "bookmaker_url": r.get("url"), "odds_history": [], "model": None,
+                }
+                matches.append(m)
+                new_odds[mid] = m["odds"]
+        if new_odds:
+            history = await self._snapshot(new_odds)
+            for m in matches:
+                if m["id"] in new_odds:
+                    m["odds_history"] = history.get(m["id"], [])
+                    m["model"] = m.get("model") or self._model_from_odds(m["odds"])
 
     @staticmethod
     def _model_from_prediction(pred: dict | None) -> dict | None:
@@ -393,7 +459,11 @@ class ApiFootballProvider:
             if not rows:
                 return None
             m = self._base(rows[0])
-        await self._enrich(m)
+        if m.get("source") != "oddspapi":
+            await self._enrich(m)
+        else:
+            m.setdefault("form", {})
+            m.setdefault("injuries", [])
         m["analysis"] = analytics.analysis(m)
         return m
 

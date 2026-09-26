@@ -112,4 +112,7 @@ async def web_stats(call: CallbackQuery, sessionmaker: async_sessionmaker[AsyncS
     provider = web_api.CURRENT_PROVIDER
     if provider is not None and getattr(provider, "remaining", None) is not None:
         text += f"\n\n⚽ API-Football: осталось запросов сегодня <b>{provider.remaining}</b>"
+    op = getattr(provider, "op", None) if provider is not None else None
+    if op is not None and op.used_this_month is not None:
+        text += f"\n📈 OddsPapi: использовано за месяц <b>{op.used_this_month}</b> из 250"
     await show(call, text, InlineKeyboardMarkup(inline_keyboard=[back_button()]))
