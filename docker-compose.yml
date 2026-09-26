@@ -1,0 +1,33 @@
+# Сервер 24/7: бот + мини-апп + автоматический HTTPS (Caddy / Let's Encrypt).
+# Запуск: DOMAIN=terminal.example.com docker compose up -d --build
+services:
+  bot:
+    build: ./bot
+    restart: always
+    env_file: ./bot/.env
+    environment:
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: "8080"
+      WEBAPP_URL: https://${DOMAIN:?укажите DOMAIN}
+    volumes:
+      - ./bot/data:/app/data   # база, логи, кэш API — переживают обновления
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: always
+    depends_on: [bot]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

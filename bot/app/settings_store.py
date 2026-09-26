@@ -11,7 +11,7 @@ from app.models import Setting
 # Плейсхолдеры в текстах: {name} {promo} {ref_link} {channel} {promo_title}
 DEFAULTS: dict[str, tuple[str, str]] = {
     "ref_link": (
-        "Глобальная реф-ссылка",
+        "Глобальная реф-ссылка ({tg_id} заменяется на ID пользователя — для авто-VIP)",
         "https://example.com/?ref=changeme",
     ),
     "greeting_template": (
@@ -70,6 +70,11 @@ DEFAULTS: dict[str, tuple[str, str]] = {
         "Для безлимитного терминала подтвердите статус VIP: депозит от 200 000 ₽ на 1win.",
     ),
     "bookmaker_name": ("Название БК на кнопках мини-аппа", "1win"),
+    "vip_deposit_threshold": ("Сумма депозитов для авто-VIP, ₽ (0 — только вручную)", "200000"),
+    "vip_granted_text": (
+        "Сообщение при выдаче VIP",
+        "👑 <b>Статус VIP активирован!</b>\n\nБезлимитный хедж-терминал и все режимы уже доступны. Откройте терминал кнопкой ниже.",
+    ),
 }
 
 

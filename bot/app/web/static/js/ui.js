@@ -14,7 +14,7 @@ export const money = (v, sign = false) =>
 export const num = (v) => nf.format(Math.round(v));
 export const pct = (v, digits = 0, sign = false) =>
   (sign && v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v * 100).toFixed(digits).replace(".", ",") + "%";
-export const odds = (v) => Number(v).toFixed(2);
+export const odds = (v) => (Number(v) > 1 ? Number(v).toFixed(2) : "—");
 export const compact = (v) => {
   const a = Math.abs(v), s = v < 0 ? "−" : "";
   if (a >= 1e6) return s + (a / 1e6).toFixed(1).replace(".", ",") + " млн";
@@ -125,7 +125,10 @@ export function clubColors(name) {
   return [`hsl(${h} 60% 52%)`, `hsl(${(h + 40) % 360} 45% 30%)`];
 }
 
-export function crest(name, short, size = "") {
+export function crest(name, short, size = "", logo = "") {
+  if (logo && /^https:\/\//.test(logo)) {
+    return `<span class="crest logo ${size}" aria-hidden="true"><img src="${esc(logo)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  }
   const [a, b] = clubColors(name);
   const label = short || String(name).slice(0, 3).toUpperCase();
   return `<span class="crest ${size}" style="--a:${a};--b:${b}" aria-hidden="true"><span>${esc(label)}</span></span>`;

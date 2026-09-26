@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import inspect
+import json
+from urllib.parse import parse_qsl
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,10 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import settings_store
 from app.config import Config
-from app.models import Channel, HedgeCalc, JoinRequest, Promo, TrackedBet, User, WebProfile
+from app.models import Channel, HedgeCalc, JoinRequest, PartnerEvent, Promo, TrackedBet, User, WebProfile
+from app.services.messaging import personal_link
 from app.web import hedge
 from app.web.auth import TgUser, validate_init_data
 from app.web.demo import DemoProvider
+
+CURRENT_PROVIDER = None  # для статистики в админке
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 WEEK = timedelta(days=7)
@@ -174,9 +180,38 @@ def bet_dict(b: TrackedBet) -> dict:
 
 
 # ── приложение ───────────────────────────────────────────────────────────────
-def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession]) -> FastAPI:
+USER_KEYS = ("sub1", "subid", "sub_id", "sub", "click_id", "clickid", "tg_id", "user")
+EVENT_KEYS = ("event", "action", "type", "goal", "status")
+AMOUNT_KEYS = ("amount", "sum", "deposit", "payout", "value")
+DEPOSIT_WORDS = ("dep", "ftd", "first_deposit", "firstdep", "deposit", "redep", "purchase", "sale")
+REG_WORDS = ("reg", "registration", "signup", "lead")
+
+
+def _pick(params: dict, keys: tuple[str, ...]) -> str | None:
+    lower = {k.lower(): v for k, v in params.items()}
+    for k in keys:
+        if lower.get(k) not in (None, ""):
+            return str(lower[k])
+    return None
+
+
+def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession], notify=None) -> FastAPI:
     app = FastAPI(title="Hedge Terminal", docs_url=None, redoc_url=None, openapi_url=None)
-    provider = DemoProvider()
+    if cfg.apifootball_key:
+        from app.web.apifootball import ApiFootballProvider
+
+        provider = ApiFootballProvider(cfg.apifootball_key, sessionmaker, leagues=list(cfg.apifootball_leagues) or None,
+                                       plan=cfg.apifootball_plan, tz=cfg.timezone)
+    else:
+        provider = DemoProvider()
+    app.state.provider = provider
+    global CURRENT_PROVIDER
+    CURRENT_PROVIDER = provider
+
+    async def run(value):
+        """Демо-провайдер синхронный, API — асинхронный: поддерживаем оба."""
+
+        return await value if inspect.isawaitable(value) else value
     tokens = list(cfg.bot_tokens)
 
     async def get_session():
@@ -236,7 +271,7 @@ def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession]) -> Fa
             "start_bank": profile.start_bank,
             "hedge": await hedge_quota(session, profile),
             "bookmaker": await settings_store.get(session, "bookmaker_name"),
-            "ref_link": await settings_store.get(session, "ref_link"),
+            "ref_link": personal_link(await settings_store.get(session, "ref_link"), user.id),
             "vip_text": await settings_store.get(session, "vip_text"),
             "data_source": provider.name,
         }
@@ -263,9 +298,9 @@ def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession]) -> Fa
         bets = (await session.scalars(select(TrackedBet).where(TrackedBet.tg_id == user.id))).all()
         stats = bet_stats(list(bets), profile.start_bank)
         pending = sorted((b for b in bets if b.status == "pending"), key=lambda b: -b.stake * b.odds)
-        matches = provider.list_matches()
+        matches = await run(provider.list_matches())
         return {
-            "feed": provider.feed(),
+            "feed": await run(provider.feed()),
             "summary": {k: stats[k] for k in ("bank", "start_bank", "pending_count", "periods", "curve")},
             "pending": [bet_dict(b) for b in pending[:3]],
             "live": [m for m in matches if m["status"] == "live"],
@@ -274,11 +309,11 @@ def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession]) -> Fa
 
     @app.get("/api/matches")
     async def matches(_: TgUser = Depends(current_user)) -> dict:
-        return {"matches": provider.list_matches()}
+        return {"matches": await run(provider.list_matches())}
 
     @app.get("/api/matches/{match_id}")
     async def match(match_id: int, _: TgUser = Depends(current_user)) -> dict:
-        data = provider.get_match(match_id)
+        data = await run(provider.get_match(match_id))
         if data is None:
             raise HTTPException(404, "Матч не найден")
         return data
@@ -365,11 +400,76 @@ def build_app(cfg: Config, sessionmaker: async_sessionmaker[AsyncSession]) -> Fa
             .order_by(Channel.sort_order, Channel.id))).all()
         return {
             "promos": [{"id": p.id, "title": p.title, "code": p.code, "description": p.description,
-                        "link": p.ref_link or global_ref} for p in promos],
+                        "link": personal_link(p.ref_link or global_ref, user.id)} for p in promos],
             "channels": [{"id": c.id, "title": c.title, "link": c.invite_link, "done": c.id in done,
                           "promo_title": c.promo.title if c.promo else None} for c in channels],
-            "ref_link": global_ref,
+            "ref_link": personal_link(global_ref, user.id),
         }
+
+    @app.api_route("/postback/{secret}", methods=["GET", "POST"])
+    async def postback(secret: str, request: Request, session: AsyncSession = Depends(get_session)) -> dict:
+        """Постбек партнёрки 1win: регистрация или депозит игрока.
+
+        В кабинете партнёрки укажите URL вида
+        https://ваш-домен/postback/<POSTBACK_SECRET>?sub1={sub1}&event={event}&amount={amount}
+        а в реф-ссылке передавайте sub1={tg_id} — бот подставит Telegram ID.
+        """
+
+        if not cfg.postback_secret or secret != cfg.postback_secret:
+            raise HTTPException(404, "Not found")
+        params = dict(request.query_params)
+        if request.method == "POST":
+            raw_body = (await request.body()).decode("utf-8", "ignore").strip()
+            if raw_body.startswith("{"):
+                try:
+                    body = json.loads(raw_body)
+                    if isinstance(body, dict):
+                        params.update({k: str(v) for k, v in body.items()})
+                except ValueError:
+                    pass
+            elif raw_body:
+                params.update(dict(parse_qsl(raw_body, keep_blank_values=True)))
+
+        raw_user = _pick(params, USER_KEYS)
+        tg_id = int(raw_user) if raw_user and raw_user.lstrip("-").isdigit() else None
+        event_raw = (_pick(params, EVENT_KEYS) or "").lower()
+        amount = 0.0
+        try:
+            amount = float((_pick(params, AMOUNT_KEYS) or "0").replace(",", "."))
+        except ValueError:
+            pass
+        event = ("deposit" if any(w in event_raw for w in DEPOSIT_WORDS) or (amount > 0 and not event_raw)
+                 else "registration" if any(w in event_raw for w in REG_WORDS) else event_raw or "unknown")
+
+        session.add(PartnerEvent(tg_id=tg_id, event=event, amount=amount, currency=params.get("currency"),
+                                 player_id=params.get("player_id") or params.get("user_id"),
+                                 raw=json.dumps(params, ensure_ascii=False)[:4000]))
+        await session.commit()
+
+        granted = False
+        if tg_id and event == "deposit":
+            threshold = await settings_store.get_int(session, "vip_deposit_threshold", 200000)
+            total = await session.scalar(
+                select(func.coalesce(func.sum(PartnerEvent.amount), 0.0))
+                .where(PartnerEvent.tg_id == tg_id, PartnerEvent.event == "deposit")) or 0.0
+            profile = await session.get(WebProfile, tg_id)
+            if profile is None:
+                profile = WebProfile(tg_id=tg_id)
+                session.add(profile)
+            if threshold > 0 and total >= threshold and profile.tier != "vip":
+                profile.tier = "vip"
+                granted = True
+            await session.commit()
+            if granted and notify is not None:
+                try:
+                    await notify(tg_id, await settings_store.get(session, "vip_granted_text"))
+                except Exception:  # noqa: BLE001
+                    pass
+        return {"ok": True, "event": event, "vip_granted": granted}
+
+    @app.get("/healthz")
+    async def healthz() -> dict:
+        return {"ok": True, "data_source": provider.name}
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

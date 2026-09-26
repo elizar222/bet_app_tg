@@ -89,7 +89,7 @@ export async function renderHome(root) {
       <div class="xsum"><span class="muted">Вероятность по модели</span><b>${pct(feed.express.prob, 1)}</b></div>
     </section>` : ""}
 
-    <section class="card">
+    ${tip ? `<section class="card">
       ${cardHead("Прогнозы канала · 30 дней")}
       <div class="tip">
         ${ring(tip.win_rate, "var(--green)", "зашло")}
@@ -102,7 +102,7 @@ export async function renderHome(root) {
           <div class="dots">${tip.last.map((w) => `<i class="${w ? "w" : "l"}"></i>`).join("")}<span class="muted">последние 10</span></div>
         </div>
       </div>
-    </section>
+    </section>` : ""}
 
     <section class="card">
       ${cardHead("Топ-матчи", `<a class="link" href="#/matches">Все</a>`)}
@@ -120,5 +120,5 @@ export async function renderHome(root) {
       fmt: (i) => money(values[i]),
     });
   }
-  sparkline(root.querySelector('[data-chart="tip"]'), tip.curve, "var(--green)");
+  if (tip) sparkline(root.querySelector('[data-chart="tip"]'), tip.curve, "var(--green)");
 }

@@ -132,6 +132,7 @@ export async function renderHedge(root, params) {
 
 function liveOdds(m) {
   const o = m.live?.odds || m.odds;
+  if (!(o && o.home > 1 && o.draw > 1 && o.away > 1)) return "";
   const dc = (a, b) => Math.max(1.01, 1 / (1 / a + 1 / b)).toFixed(2);
   const opts = [
     ["П1", o.home], ["X", o.draw], ["П2", o.away],

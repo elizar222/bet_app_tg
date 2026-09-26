@@ -209,3 +209,44 @@ class TrackedBet(Base):
     hedge_saved: Mapped[float | None] = mapped_column()  # сколько хедж дал сверх выкупа
     placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ── Данные матчей и партнёрка ────────────────────────────────────────────────
+
+
+class ApiCache(Base):
+    """Ответы внешних API: переживают перезапуск, чтобы не тратить дневной лимит."""
+
+    __tablename__ = "api_cache"
+
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    payload: Mapped[str] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OddsSnapshot(Base):
+    """Снимок кэфов 1X2 — из них строится график движения линии."""
+
+    __tablename__ = "odds_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fixture_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    home: Mapped[float] = mapped_column()
+    draw: Mapped[float] = mapped_column()
+    away: Mapped[float] = mapped_column()
+    taken_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class PartnerEvent(Base):
+    """Постбек партнёрки: регистрация или депозит игрока, пришедшего по нашей ссылке."""
+
+    __tablename__ = "partner_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+    event: Mapped[str] = mapped_column(String(32))
+    amount: Mapped[float] = mapped_column(default=0.0)
+    currency: Mapped[str | None] = mapped_column(String(8))
+    player_id: Mapped[str | None] = mapped_column(String(64))
+    raw: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

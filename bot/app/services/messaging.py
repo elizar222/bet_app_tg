@@ -10,6 +10,15 @@ from app import settings_store
 from app.models import Channel, JoinRequest, Promo, User
 
 
+def personal_link(link: str | None, tg_id: int) -> str:
+    """Реф-ссылка с меткой пользователя: {tg_id} в ссылке заменяется на его Telegram ID.
+
+    Так партнёрка присылает постбек с этим ID, и депозит засчитывается нужному человеку.
+    """
+
+    return (link or "").replace("{tg_id}", str(tg_id))
+
+
 def render(template: str, **values: str) -> str:
     """Безопасная подстановка: неизвестный плейсхолдер не роняет отправку."""
 
@@ -46,7 +55,7 @@ async def build_promo_text(
         name=user.first_name or "друг",
         promo=promo.code,
         promo_title=promo.description or promo.title,
-        ref_link=promo.ref_link or global_ref,
+        ref_link=personal_link(promo.ref_link or global_ref, user.tg_id),
         channel=channel.title,
     )
     return f"{body}\n\n{note}" if note else body

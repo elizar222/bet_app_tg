@@ -1,0 +1,18 @@
+# Вариант без Docker: systemd. Скопируйте в /etc/systemd/system/ и поправьте пути.
+# HTTPS в этом варианте — через nginx/Caddy перед 127.0.0.1:8080.
+[Unit]
+Description=Hedge Terminal bot + mini app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hedge
+WorkingDirectory=/opt/hedge-terminal/bot
+ExecStart=/opt/hedge-terminal/bot/.venv/bin/python run.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

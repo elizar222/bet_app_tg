@@ -16,7 +16,7 @@ from sqlalchemy import select
 from app.admin.bot import build_admin_dispatcher, build_admin_router
 from app.config import BASE_DIR, Config, load_config
 from app.db import close_db, init_db, session_factory
-from app.models import BotAccount
+from app.models import BotAccount, User
 from app.scheduler import build_scheduler
 from app.services.sender import sender
 from app import settings_store
@@ -86,12 +86,12 @@ async def setup_menu_button(bots: list[Bot], url: str, text: str) -> None:
             log.error("Не удалось поставить кнопку мини-аппа боту %s: %s", bot.id, exc)
 
 
-async def serve_web(cfg: Config) -> None:
+async def serve_web(cfg: Config, notify=None) -> None:
     import uvicorn
 
     from app.web.api import build_app
 
-    app = build_app(cfg, session_factory())
+    app = build_app(cfg, session_factory(), notify=notify)
     server = uvicorn.Server(
         uvicorn.Config(app, host=cfg.web_host, port=cfg.web_port, log_level="warning", access_log=False)
     )
@@ -115,11 +115,21 @@ async def main() -> None:
     bot_map = await sync_bot_accounts(worker_bots)
 
     # мини-апп: сервер + (если WEBAPP_URL=auto) бесплатный https-туннель
+    bots_by_db_id = {db_id: bot for bot in worker_bots for tg_id, db_id in bot_map.items() if bot.id == tg_id}
+
+    async def notify(tg_id: int, text: str) -> None:
+        """Сообщение пользователю от закреплённого за ним бота (например, «VIP выдан»)."""
+
+        async with session_factory()() as session:
+            user = await session.scalar(select(User).where(User.tg_id == tg_id))
+        bot = bots_by_db_id.get(user.bot_id) if user else None
+        await sender.send(bot or worker_bots[0], tg_id, text)
+
     tasks = []
     tunnel = None
     webapp_url = cfg.webapp_url
     if cfg.web_enabled:
-        tasks.append(serve_web(cfg))
+        tasks.append(serve_web(cfg, notify))
         log.info("Мини-апп в браузере: http://%s:%s", cfg.web_host, cfg.web_port)
         if webapp_url.lower() == "auto":
             from app.tunnel import Tunnel

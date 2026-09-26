@@ -5,7 +5,7 @@ import { probBar } from "../charts.js";
 
 export function matchRow(m, { showLeague = false } = {}) {
   const live = m.status === "live";
-  const o = live && m.live ? m.live.odds : m.odds;
+  const o = (live && m.live && m.live.odds) || m.odds || {};
   const badges = [];
   if (m.best_value) badges.push(`<span class="chip g">Value ${pct(m.best_value.edge, 0, true)}</span>`);
   if (m.odds_move && m.odds_move.change <= -0.06)
@@ -18,8 +18,8 @@ export function matchRow(m, { showLeague = false } = {}) {
     </div>
     <div class="mrow-main">
       <div class="teams">
-        <div>${crest(m.home.name, m.home.short, "sm")}<span>${esc(m.home.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[0])}</b>` : ""}</div>
-        <div>${crest(m.away.name, m.away.short, "sm")}<span>${esc(m.away.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[1])}</b>` : ""}</div>
+        <div>${crest(m.home.name, m.home.short, "sm", m.home.logo)}<span>${esc(m.home.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[0])}</b>` : ""}</div>
+        <div>${crest(m.away.name, m.away.short, "sm", m.away.logo)}<span>${esc(m.away.name)}</span>${live ? `<b>${esc(m.live.score.split(":")[1])}</b>` : ""}</div>
       </div>
       <div class="oddsbox">
         <span><small>П1</small>${odds(o.home)}</span>

@@ -14,7 +14,7 @@ from __future__ import annotations
 import random
 from datetime import date, datetime, timedelta, timezone
 
-from app.web import model
+from app.web import analytics, model
 
 LEAGUES: dict[str, list[tuple[str, str, float, float]]] = {
     # команда, короткое имя, атака, оборона (меньше = надёжнее)
@@ -336,88 +336,14 @@ class DemoProvider:
         return None
 
     def _summary(self, m: dict) -> dict:
-        a = self._analysis(m)
-        best = max(a["value"], key=lambda v: v["edge"])
-        out = {k: m[k] for k in ("id", "league", "country", "kickoff", "status", "home", "away", "odds")}
-        out["probs"] = a["fair"]
-        out["best_value"] = best if best["edge"] > 0.03 else None
-        out["odds_move"] = a["odds_move"]
-        if m["status"] == "live":
-            out["live"] = {"minute": m["live"]["minute"], "score": m["live"]["score"], "odds": m["live"]["odds"]}
-        return out
+        return analytics.summary(m)
 
     def _analysis(self, m: dict) -> dict:
-        o = m["odds"]
-        fair, margin = model.fair_probs([o["home"], o["draw"], o["away"]])
-        mk = m["model"]
-        labels = [("home", "П1"), ("draw", "X"), ("away", "П2")]
-        value = [
-            {"market": "1X2", "pick": lbl, "key": key, "odds": o[key], "model": mk[key],
-             "fair": fair[i], "edge": model.edge(mk[key], o[key])}
-            for i, (key, lbl) in enumerate(labels)
-        ]
-        value += [
-            {"market": "Тотал", "pick": "ТБ 2.5", "key": "over25", "odds": o["over25"], "model": mk["over25"],
-             "fair": model.fair_probs([o["over25"], o["under25"]])[0][0], "edge": model.edge(mk["over25"], o["over25"])},
-            {"market": "Тотал", "pick": "ТМ 2.5", "key": "under25", "odds": o["under25"], "model": 1 - mk["over25"],
-             "fair": model.fair_probs([o["over25"], o["under25"]])[0][1], "edge": model.edge(1 - mk["over25"], o["under25"])},
-            {"market": "Обе забьют", "pick": "Да", "key": "btts_yes", "odds": o["btts_yes"], "model": mk["btts"],
-             "fair": model.fair_probs([o["btts_yes"], o["btts_no"]])[0][0], "edge": model.edge(mk["btts"], o["btts_yes"])},
-            {"market": "Обе забьют", "pick": "Нет", "key": "btts_no", "odds": o["btts_no"], "model": 1 - mk["btts"],
-             "fair": model.fair_probs([o["btts_yes"], o["btts_no"]])[0][1], "edge": model.edge(1 - mk["btts"], o["btts_no"])},
-        ]
-        first, last = m["odds_history"][0], m["odds_history"][-1]
-        moves = {k: (last[k] - first[k]) / first[k] for k in ("home", "draw", "away")}
-        key = min(moves, key=lambda k: moves[k])
-        return {
-            "fair": {"home": fair[0], "draw": fair[1], "away": fair[2]},
-            "margin": margin,
-            "value": value,
-            "odds_move": {"key": key, "pick": dict(labels)[key], "from": first[key], "to": last[key],
-                          "change": moves[key]},
-        }
+        return analytics.analysis(m)
 
     def feed(self) -> dict:
         self._ensure()
-        values, drops, candidates = [], [], []
-        for m in self._matches:
-            a = self._analysis(m)
-            title = f'{m["home"]["name"]} — {m["away"]["name"]}'
-            for v in a["value"]:
-                if v["edge"] > 0.03 and m["status"] != "live":
-                    values.append({"match_id": m["id"], "title": title, "league": m["league"],
-                                   "kickoff": m["kickoff"], **v})
-                if m["status"] != "live" and 1.25 <= v["odds"] <= 1.9 and v["model"] >= 0.55:
-                    candidates.append({"match_id": m["id"], "title": title, "league": m["league"],
-                                       "kickoff": m["kickoff"], **v})
-            mv = a["odds_move"]
-            if mv["change"] <= -0.06:
-                drops.append({"match_id": m["id"], "title": title, "league": m["league"],
-                              "kickoff": m["kickoff"], "status": m["status"], **mv})
-        values.sort(key=lambda v: -v["edge"])
-        drops.sort(key=lambda d: d["change"])
-        # экспресс дня: по одному событию с матча, самые вероятные
-        candidates.sort(key=lambda v: -v["model"])
-        express, used = [], set()
-        for c in candidates:
-            if c["match_id"] in used:
-                continue
-            express.append(c)
-            used.add(c["match_id"])
-            if len(express) == 4:
-                break
-        total_odds = 1.0
-        total_prob = 1.0
-        for e in express:
-            total_odds *= e["odds"]
-            total_prob *= e["model"]
-
-        return {
-            "value": values[:6],
-            "drops": drops[:6],
-            "express": {"picks": express, "odds": round(total_odds, 2), "prob": total_prob},
-            "tipster": self._tipster(),
-        }
+        return analytics.feed(self._matches, self._tipster())
 
     def _tipster(self) -> dict:
         """Статистика прогнозов канала за 30 дней (демо)."""

@@ -71,10 +71,14 @@ async def run_broadcast(
                 name=user.first_name or "друг",
                 promo=promo.code if promo else "",
                 promo_title=(promo.description or promo.title) if promo else "",
-                ref_link=(promo.ref_link if promo and promo.ref_link else global_ref),
+                ref_link=messaging.personal_link(promo.ref_link if promo and promo.ref_link else global_ref, user.tg_id),
             )
 
-            result = await sender.send(bot, user.dm_chat_id, text, reply_markup=keyboard)
+            markup = keyboard
+            if keyboard is not None and "{tg_id}" in (broadcast.button_url or ""):
+                markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                    text=broadcast.button_text, url=messaging.personal_link(broadcast.button_url, user.tg_id))]])
+            result = await sender.send(bot, user.dm_chat_id, text, reply_markup=markup)
             if result == SendResult.OK:
                 broadcast.sent_count += 1
                 user.last_sent_at = datetime.now(timezone.utc)

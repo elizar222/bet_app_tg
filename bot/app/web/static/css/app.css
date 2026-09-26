@@ -479,3 +479,15 @@ p { margin: 0; }
   *, *::before, *::after { animation-duration: .001ms !important; animation-delay: 0s !important; transition-duration: .001ms !important; }
   .chart .line, .spark .line { stroke-dashoffset: 0; }
 }
+.crest.logo { background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, .35); }
+.crest.logo::after { display: none; }
+.crest.logo img { width: 78%; height: 78%; object-fit: contain; position: relative; z-index: 1; }
+.crest.sm.logo { background: transparent; box-shadow: none; }
+.crest.sm.logo img { width: 100%; height: 100%; }
+.empty-card { color: var(--text-2); font-size: 13px; text-align: center; padding: 6px 0; }
+.bestodds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.bestodds > div { background: rgba(255, 255, 255, .035); border: 1px solid var(--stroke); border-radius: var(--r-sm); padding: 9px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bestodds b { font-family: var(--mono); font-size: 16px; color: var(--gold); }
+.bestodds span { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev-i.red { background: var(--red); }
+.ev-i.other { background: var(--muted); }

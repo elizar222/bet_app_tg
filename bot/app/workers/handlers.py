@@ -172,7 +172,7 @@ async def on_start(
         text = messaging.render(
             await settings_store.get(session, "start_text"),
             name=message.from_user.first_name or "друг",
-            ref_link=await settings_store.get(session, "ref_link"),
+            ref_link=messaging.personal_link(await settings_store.get(session, "ref_link"), message.from_user.id),
         )
         if single_bot and message.from_user.id in admin_ids:
             text += "\n\n🛠 Вы админ. Админка: /admin"

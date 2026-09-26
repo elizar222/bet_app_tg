@@ -36,6 +36,15 @@ class Config:
     webapp_url: str = ""  # публичный https-адрес (туннель cloudflared/ngrok или домен)
     web_dev_user_id: int = 0  # >0 — можно открыть мини-апп в обычном браузере без Telegram
 
+    # данные матчей
+    apifootball_key: str = ""
+    apifootball_plan: str = "free"  # free | pro
+    apifootball_leagues: tuple[int, ...] = ()
+    oddspapi_key: str = ""
+
+    # партнёрка: постбеки о регистрациях и депозитах
+    postback_secret: str = ""
+
     @property
     def single_bot(self) -> bool:
         """Админка живёт в рабочем боте: ADMIN_BOT_TOKEN пустой или совпадает с рабочим."""
@@ -59,6 +68,11 @@ def load_config() -> Config:
         web_port=int((os.getenv("WEB_PORT") or "8080").strip()),
         webapp_url=(os.getenv("WEBAPP_URL") or "").strip().rstrip("/"),
         web_dev_user_id=int((os.getenv("WEB_DEV_USER_ID") or "0").strip() or 0),
+        apifootball_key=(os.getenv("APIFOOTBALL_KEY") or "").strip(),
+        apifootball_plan=(os.getenv("APIFOOTBALL_PLAN") or "free").strip().lower(),
+        apifootball_leagues=tuple(int(x) for x in _split(os.getenv("APIFOOTBALL_LEAGUES")) if x.isdigit()),
+        oddspapi_key=(os.getenv("ODDSPAPI_KEY") or "").strip(),
+        postback_secret=(os.getenv("POSTBACK_SECRET") or "").strip(),
     )
 
     if not cfg.bot_tokens:
