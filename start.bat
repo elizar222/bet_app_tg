@@ -58,6 +58,14 @@ exit /b 1
 copy /y requirements.txt ".venv\installed.txt" >nul
 
 :run
+rem Проверяем, что все библиотеки на месте; если нет — переустанавливаем
+".venv\Scripts\python.exe" -c "import greenlet, sqlalchemy.ext.asyncio, aiosqlite, aiogram, fastapi, uvicorn, apscheduler, dotenv" >nul 2>&1 || (
+  echo Доустанавливаю недостающие библиотеки...
+  del ".venv\installed.txt" >nul 2>&1
+  if exist "wheels" ".venv\Scripts\python.exe" -m pip install -q --disable-pip-version-check --no-index --find-links wheels -r requirements.txt
+  ".venv\Scripts\python.exe" -m pip install -q --disable-pip-version-check --no-cache-dir -r requirements.txt
+  copy /y requirements.txt ".venv\installed.txt" >nul
+)
 echo.
 echo Запускаю бота и мини-апп. Чтобы остановить - закройте окно или нажмите Ctrl+C.
 echo.
