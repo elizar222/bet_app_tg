@@ -28,7 +28,9 @@ export async function renderMatches(root) {
 
     const list = root.querySelector("[data-list]");
     if (!rows.length) {
-      list.innerHTML = empty("Ничего не найдено", "Попробуйте другой фильтр или лигу.");
+      list.innerHTML = matches.length
+        ? empty("Ничего не найдено", "Попробуйте другой фильтр или лигу.")
+        : empty("Матчей пока нет", "В ближайшую неделю топ-лиги не играют — скорее всего, пауза на игры сборных. Матчи появятся автоматически.");
       return;
     }
     const groups = new Map();

@@ -44,6 +44,7 @@ DONE_STATUSES = {"FT", "AET", "PEN", "AWD", "WO", "CANC", "ABD", "PST"}
 # Время жизни кэша, секунды: (free, pro)
 TTL = {
     "fixtures": (3 * 3600, 900),
+    "fixtures_later": (24 * 3600, 6 * 3600),
     "live": (240, 60),
     "odds_today": (4 * 3600, 1200),
     "odds_later": (12 * 3600, 3 * 3600),
@@ -53,6 +54,7 @@ TTL = {
     "team_last": (12 * 3600, 6 * 3600),
     "fixture_live": (240, 60),
 }
+LOOKAHEAD_DAYS = 7
 RESERVE = 20  # столько запросов держим в запасе под обязательные
 
 
@@ -129,7 +131,7 @@ class ApiFootballProvider:
             await s.commit()
 
     async def get(self, path: str, params: dict, kind: str, *, optional: bool = False,
-                  cache_only: bool = False) -> list:
+                  cache_only: bool = False, keep=None) -> list:
         """Запрос с кэшем. Возвращает поле response или [] / устаревший кэш при ошибке."""
 
         key = path + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
@@ -166,6 +168,9 @@ class ApiFootballProvider:
                     self.blocked_until = tomorrow if "limit" in text else now + timedelta(minutes=10)
                 return cached[1] if cached else []  # type: ignore[return-value]
             data = body.get("response", []) if isinstance(body, dict) else []
+            if keep is not None:
+                # храним только нужное: ответ «все матчи дня» весит мегабайты
+                data = [row for row in data if keep(row)]
             await self._store(key, data)
             return data
 
@@ -175,8 +180,11 @@ class ApiFootballProvider:
 
     async def _fixtures(self) -> list[dict]:
         out: dict[int, dict] = {}
-        for day in (0, 1):
-            rows = await self.get("/fixtures", {"date": self._local_date(day), "timezone": "UTC"}, "fixtures")
+        ours = lambda r: r.get("league", {}).get("id") in self.leagues  # noqa: E731
+        for day in range(LOOKAHEAD_DAYS):
+            # в перерывы на сборные топ-лиги не играют — смотрим на несколько дней вперёд
+            rows = await self.get("/fixtures", {"date": self._local_date(day), "timezone": "UTC"},
+                                  "fixtures" if day < 2 else "fixtures_later", keep=ours)
             for r in rows:
                 if r.get("league", {}).get("id") in self.leagues:
                     out[r["fixture"]["id"]] = r

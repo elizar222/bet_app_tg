@@ -27,9 +27,40 @@ def say(text: str = "") -> None:
     lines.append(text)
 
 
+def _trim(data, n: int = 25):
+    """Большие списки режем, чтобы файл оставался валидным JSON и небольшим."""
+
+    if isinstance(data, list):
+        return [_trim(x, n) for x in data[:n]]
+    if isinstance(data, dict):
+        return {k: _trim(v, n) for k, v in data.items()}
+    return data
+
+
 def dump(name: str, data) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / name).write_text(json.dumps(data, ensure_ascii=False, indent=1)[:400_000], encoding="utf-8")
+    (OUT / name).write_text(json.dumps(_trim(data), ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+async def probe(http: aiohttp.ClientSession, name: str, url: str, params: dict, headers: dict | None = None):
+    """Пробный запрос: сохраняем ответ и пишем в отчёт, что вернулось."""
+
+    try:
+        async with http.get(url, params=params, headers=headers or {}) as r:
+            status = r.status
+            body = await r.json(content_type=None)
+    except Exception as exc:  # noqa: BLE001
+        say(f"  {name}: не удалось — {exc}")
+        return None
+    dump(f"{name}.json", body)
+    if isinstance(body, dict) and body.get("errors"):
+        say(f"  {name}: ОШИБКА {body['errors']}")
+    elif isinstance(body, dict) and "response" in body:
+        say(f"  {name}: OK, результатов {body.get('results')}")
+    else:
+        size = len(body) if isinstance(body, (list, dict)) else 0
+        say(f"  {name}: HTTP {status}, элементов {size}")
+    return body
 
 
 async def check_apifootball(http: aiohttp.ClientSession, key: str, leagues: tuple[int, ...]) -> None:
@@ -76,6 +107,17 @@ async def check_apifootball(http: aiohttp.ClientSession, key: str, leagues: tupl
                 n = len(od.get("response", []))
                 bms = {b["name"] for it in od.get("response", []) for b in it.get("bookmakers", [])}
                 say(f"Кэфы: {n} матчей, букмекеры: {', '.join(sorted(bms)[:8]) or 'нет'}")
+
+        say("Проверка ограничений бесплатного тарифа (EPL):")
+        season = datetime.now().year if datetime.now().month >= 7 else datetime.now().year - 1
+        nxt = await probe(http, "af_next", BASE_URL + "/fixtures", {"league": 39, "season": season, "next": 5}, headers)
+        await probe(http, "af_standings", BASE_URL + "/standings", {"league": 39, "season": season}, headers)
+        await probe(http, "af_team_last", BASE_URL + "/fixtures", {"team": 42, "last": 5}, headers)
+        await probe(http, "af_odds_league", BASE_URL + "/odds", {"league": 39, "season": season}, headers)
+        fid = (nxt or {}).get("response", [{}])[0].get("fixture", {}).get("id") if (nxt or {}).get("response") else None
+        if fid:
+            await probe(http, "af_predictions", BASE_URL + "/predictions", {"fixture": fid}, headers)
+            await probe(http, "af_odds_fixture", BASE_URL + "/odds", {"fixture": fid}, headers)
     except Exception as exc:  # noqa: BLE001
         say(f"Не удалось связаться с API-Football: {exc}")
 
@@ -100,6 +142,18 @@ async def check_oddspapi(http: aiohttp.ClientSession, key: str) -> None:
             say(f"{path}: HTTP {status}, элементов: {size}")
         except Exception as exc:  # noqa: BLE001
             say(f"{path}: не удалось — {exc}")
+    say("Пробные запросы кэфов (АПЛ, tournamentId=17):")
+    fx = await probe(http, "op_fixtures", base + "/fixtures", {"tournamentId": 17, "apiKey": key})
+    if not (isinstance(fx, list) and fx):
+        fx = await probe(http, "op_fixtures_sport", base + "/fixtures", {"sportId": 10, "tournamentId": 17, "apiKey": key})
+    await probe(http, "op_odds_by_tournaments", base + "/odds-by-tournaments",
+                {"bookmaker": "pinnacle", "tournamentIds": "17", "oddsFormat": "decimal", "apiKey": key})
+    fixture_id = None
+    if isinstance(fx, list) and fx and isinstance(fx[0], dict):
+        fixture_id = fx[0].get("fixtureId") or fx[0].get("id")
+    if fixture_id:
+        await probe(http, "op_odds_fixture", base + "/odds", {"fixtureId": fixture_id, "oddsFormat": "decimal", "apiKey": key})
+    await probe(http, "op_bookmakers", base + "/bookmakers", {"apiKey": key})
     say("Сырые ответы сохранены в data/check/ — пришлите папку разработчику.")
 
 

@@ -106,7 +106,8 @@ export async function renderHome(root) {
 
     <section class="card">
       ${cardHead("Топ-матчи", `<a class="link" href="#/matches">Все</a>`)}
-      <div class="mlist">${data.top.map((m) => matchRow(m, { showLeague: true })).join("")}</div>
+      ${data.top.length ? `<div class="mlist">${data.top.map((m) => matchRow(m, { showLeague: true })).join("")}</div>`
+        : `<p class="empty-card">В ближайшую неделю матчей топ-лиг нет — похоже, пауза на игры сборных.</p>`}
     </section>
   `;
 
