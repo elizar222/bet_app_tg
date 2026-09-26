@@ -62,7 +62,7 @@ async function start() {
   if (tg) {
     tg.ready();
     tg.expand();
-    try { tg.setHeaderColor("#0b0c0e"); tg.setBackgroundColor("#0b0c0e"); tg.setBottomBarColor?.("#0b0c0e"); } catch { /* старые клиенты */ }
+    try { tg.setHeaderColor("#121212"); tg.setBackgroundColor("#121212"); tg.setBottomBarColor?.("#121212"); } catch { /* старые клиенты */ }
     tg.BackButton?.onClick(() => (history.length > 1 ? history.back() : (location.hash = "#/matches")));
   }
   document.querySelectorAll(".nav a").forEach((a) => a.addEventListener("click", () => haptic()));
