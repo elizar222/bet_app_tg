@@ -106,7 +106,7 @@ function body(s, bets) {
     </section>
 
     <section class="card">
-      ${cardHead("Хеджи", info("Сколько вы заработали хеджами сверх того, что предлагал букмекер за выкуп."))}
+      ${cardHead("Хеджи", info("Разница между тем, что вы получили по хеджам, и тем, что предлагал букмекер за выкуп, — по вашим записям в трекере."))}
       <div class="kpis two">
         ${kpi("Захеджировано", s.hedged_count)}
         ${kpi("Выгода vs выкуп", money(s.hedge_saved, true), signClass(s.hedge_saved))}

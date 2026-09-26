@@ -55,7 +55,7 @@ function overview(host, m) {
   const names = { home: m.home.name, draw: "Ничья", away: m.away.name };
   const probsCard = mk || a.fair ? `
     <section class="card">
-      ${cardHead("Вероятности исходов", info("«Линия» — вероятности из кэфов букмекера без его маржи. «Модель» — наш расчёт по статистике команд. Если модель выше линии, это value."))}
+      ${cardHead("Вероятности исходов", info("«Линия» — вероятности из кэфов букмекера без его маржи. «Модель» — наш расчёт по статистике команд. Если модель выше линии, по расчёту это value. Оценки не гарантируют исход матча."))}
       ${legend([["var(--text-2)", mk ? "Модель" : "Линия БК"], ...(mk && a.fair ? [["var(--line-2)", "Линия БК"]] : [])])}
       ${OUT.map(([k, l]) => {
         const main = mk ? mk[k] : a.fair[k];
@@ -72,7 +72,7 @@ function overview(host, m) {
 
   const valueCard = a.value?.length ? `
     <section class="card">
-      ${cardHead("Где перевес", info("Перевес = вероятность модели × кэф − 1. Плюс значит, что на дистанции ставка выгодна, минус — невыгодна."))}
+      ${cardHead("Где перевес", info("Перевес = вероятность модели × кэф − 1. Плюс значит, что по расчёту модели кэф выше справедливого, минус — ниже. Это оценка, а не прогноз результата."))}
       <div class="vtable">
         ${a.value.slice().sort((x, y) => y.edge - x.edge).map((v) => `
           <div class="vt-row">
@@ -127,7 +127,7 @@ function myOddsCard(m) {
   const field = (k, l) => `<label class="myodd"><span>${l}</span><input data-my="${k}" type="number" inputmode="decimal" step="0.01" min="1.01" placeholder="—" value="${v[k] ?? ""}"></label>`;
   return `
     <section class="card myodds">
-      ${cardHead("Кэфы 1win", info("Впишите кэфы, которые видите на 1win для этого матча. Приложение покажет маржу 1win, реальные шансы и сравнит с линией Pinnacle — самого точного букмекера. Зелёный процент значит, что 1win даёт на этот исход выгодную цену."))}
+      ${cardHead("Кэфы 1win", info("Впишите кэфы, которые видите на 1win для этого матча. Приложение посчитает маржу 1win, расчётные шансы и сравнит с линией Pinnacle — букмекера с одной из самых низких маржей. Зелёный процент значит, что по расчёту кэф 1win на этот исход выше справедливого."))}
       <div class="myodds-row">${field("home", "П1")}${field("draw", "X")}${field("away", "П2")}</div>
       <div data-myres></div>
     </section>`;
@@ -157,14 +157,14 @@ function mountMyOdds(host, m) {
         const edge = ref ? ref[k] * v[k] - 1 : null;
         return `<div class="myrow">
           <span><b>${l}</b> <span class="muted">${esc(names[k])}</span></span>
-          <span class="num">шанс ${pct(fair[k])}</span>
+          <span class="num">≈ ${pct(fair[k])}</span>
           ${edge == null ? "" : `<span class="chip ${edge > 0.01 ? "g" : edge < -0.04 ? "r" : "n"}">${pct(edge, 1, true)}</span>`}
         </div>`;
       }).join("")}
-      ${ref ? `<p class="hint">Процент — выгода кэфа 1win по сравнению с ${refName}. ${
+      ${ref ? `<p class="hint">Процент — расчётное отклонение кэфа 1win от ${refName}. ${
         OUT.some(([k]) => ref[k] * v[k] - 1 > 0.01)
-          ? "Есть исход с выгодной ценой — он отмечен зелёным."
-          : "Выгодных цен нет: 1win даёт кэфы ниже честных."}</p>`
+          ? "По расчёту есть исход с кэфом выше справедливого — он отмечен зелёным."
+          : "По расчёту кэфы 1win ниже справедливых на все исходы."}</p>`
         : `<p class="hint">Для сравнения нет линии Pinnacle на этот матч — показаны шансы по кэфам 1win без маржи.</p>`}
       <a class="btn" href="#/hedge?odds=${v.away}">Открыть хедж-калькулятор</a>`;
   };

@@ -57,7 +57,7 @@ export async function renderHome(root) {
     </section>` : ""}
 
     <section class="card">
-      ${cardHead("Value дня", info("Value — ставка, где наша модель оценивает шанс выше, чем букмекер. Перевес показывает, сколько в среднем приносит каждый рубль на длинной дистанции."))}
+      ${cardHead("Value дня", info("Value — исход, где наша модель оценивает шанс выше, чем букмекер. Перевес — расчётная оценка на длинной дистанции, а не обещание выигрыша."))}
       ${feed.value.length ? feed.value.map((v) => `
         <a class="vrow" href="#/match/${v.match_id}">
           <div class="vrow-l"><b>${esc(v.title)}</b><span class="muted">${esc(v.league)} · ${esc(kickoff(v.kickoff))}</span></div>
@@ -70,7 +70,7 @@ export async function renderHome(root) {
     </section>
 
     <section class="card">
-      ${cardHead("Падения кэфов", info("Если кэф быстро падает, на этот исход ставят крупные суммы. Так часто ведут себя профессиональные игроки."))}
+      ${cardHead("Падения кэфов", info("Если кэф быстро падает, на этот исход, вероятно, ставят крупные суммы."))}
       ${feed.drops.length ? feed.drops.map((d) => `
         <a class="vrow" href="#/match/${d.match_id}">
           <div class="vrow-l"><b>${esc(d.title)}</b><span class="muted">${esc(d.league)} · ${d.status === "live" ? "Live" : esc(kickoff(d.kickoff))}</span></div>
@@ -112,6 +112,7 @@ export async function renderHome(root) {
       ${data.top.length ? `<div class="mlist">${data.top.map((m) => matchRow(m, { showLeague: true })).join("")}</div>`
         : `<p class="empty-card">В ближайшую неделю матчей топ-лиг нет — похоже, пауза на игры сборных.</p>`}
     </section>
+    <p class="disclaimer">Аналитика и расчёты носят информационный характер и не гарантируют результат. Ставки связаны с риском потери денег. 18+</p>
   `;
 
   mountSearch(root);

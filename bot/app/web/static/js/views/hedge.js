@@ -54,8 +54,8 @@ export async function renderHedge(root, params) {
     </section>
 
     <section class="card">
-      ${cardHead("Стратегия", info("«Поровну» — одинаковая прибыль при любом исходе. «Без риска» — если купон не зайдёт, вы выходите в ноль, а если зайдёт — забираете максимум. «Свой %» — сами выбираете, какую часть закрыть."))}
-      ${segmented("mode", [["equal", "Поровну"], ["zero", "Без риска" + lock], ["custom", "Свой %" + lock]], form.mode)}
+      ${cardHead("Стратегия", info("«Поровну» — по расчёту одинаковый результат при обоих исходах. «Возврат ставки» — по расчёту, если купон не зайдёт, ставка возвращается, а если зайдёт — результат максимальный. «Свой %» — сами выбираете, какую часть закрыть. Все цифры — расчёт по введённым кэфам, а не обещание результата."))}
+      ${segmented("mode", [["equal", "Поровну"], ["zero", "Возврат ставки" + lock], ["custom", "Свой %" + lock]], form.mode)}
       <div class="ratio" data-ratio ${form.mode === "custom" ? "" : "hidden"}>
         <input id="h-ratio" type="range" min="10" max="130" value="${form.ratio}">
         <span class="num"><b data-ratio-v>${form.ratio}%</b> от «Поровну»</span>
@@ -84,7 +84,7 @@ export async function renderHedge(root, params) {
 
   onSeg(root, "mode", (v) => {
     if (!vip && v !== "equal") {
-      vipSheet("Режимы «Без риска» и «Свой %» доступны в VIP.");
+      vipSheet("Режимы «Возврат ставки» и «Свой %» доступны в VIP.");
       root.querySelectorAll('[data-seg="mode"] button').forEach((b) => b.classList.toggle("on", b.dataset.v === "equal"));
       form.mode = "equal";
       return;
@@ -159,12 +159,12 @@ function showResult(host, r) {
   const me = state.me;
   const bk = me.bookmaker || "1win";
   const hasCash = r.cashout != null && r.cashout > 0;
-  const modeName = { equal: "Поровну", zero: "Без риска", custom: "Свой %" }[r.mode];
+  const modeName = { equal: "Поровну", zero: "Возврат ставки", custom: "Свой %" }[r.mode];
   host.innerHTML = `
     <section class="card result">
       ${cardHead("Результат · " + modeName)}
       <div class="res-hero">
-        <span class="muted">${r.mode === "zero" ? "Максимум, если купон зайдёт" : "Гарантированная прибыль"}</span>
+        <span class="muted">${r.mode === "zero" ? "Максимум, если купон зайдёт" : "Ожидаемая прибыль"}</span>
         <div class="res-num pos" data-res>${money(r.mode === "zero" ? r.profit_if_bet_wins : r.guaranteed, true)}</div>
       </div>
       <div class="res-stake"><span>Поставьте на противоположный исход</span><b>${money(r.hedge_amount)}</b></div>
@@ -172,7 +172,7 @@ function showResult(host, r) {
         <div><span class="muted">Если купон зашёл</span><b class="${r.profit_if_bet_wins >= 0 ? "pos" : "neg"}">${money(r.profit_if_bet_wins, true)}</b></div>
         <div><span class="muted">Если зашёл хедж</span><b class="${r.profit_if_hedge_wins >= 0 ? "pos" : "neg"}">${money(r.profit_if_hedge_wins, true)}</b></div>
       </div>
-      <div class="kv"><span class="muted">Шанс, что купон зайдёт (по линии)</span><b>${pct(r.implied_prob_bet)}</b></div>
+      <div class="kv"><span class="muted">Шанс, что купон зайдёт (оценка по линии)</span><b>${pct(r.implied_prob_bet)}</b></div>
     </section>
 
     <section class="card">
@@ -183,19 +183,19 @@ function showResult(host, r) {
           <div><span class="muted">Хедж, на руки</span><b>${money(r.cash_in_hand_equal)}</b></div>
         </div>
         <div class="kv"><span class="muted">Выгода хеджа</span><b class="${r.vs_cashout >= 0 ? "pos" : "neg"}">${money(r.vs_cashout, true)} · ${pct(r.vs_cashout / r.cashout, 1, true)}</b></div>
-        <p class="hint">${r.vs_cashout >= 0 ? "Хедж выгоднее выкупа." : "Сейчас выгоднее выкуп: букмекер предлагает больше честной цены."}</p>`
-      : `<p class="hint">Честная цена выкупа сейчас — <b>${money(r.fair_cashout)}</b>. Впишите, сколько предлагает ваш букмекер, и калькулятор покажет, что выгоднее.</p>`}
+        <p class="hint">${r.vs_cashout >= 0 ? "По расчёту хедж выгоднее выкупа." : "По расчёту сейчас выгоднее выкуп: букмекер предлагает больше честной цены."}</p>`
+      : `<p class="hint">Честная цена выкупа сейчас — <b>${money(r.fair_cashout)}</b>. Впишите, сколько предлагает ваш букмекер, и калькулятор посчитает, что выгоднее.</p>`}
     </section>
 
     <section class="card">
-      ${cardHead("Прибыль при разной сумме хеджа")}
+      ${cardHead("Расчётный результат при разной сумме хеджа")}
       <div class="readout" data-ro>Проведите пальцем по графику</div>
       <div data-chart></div>
       ${legend([["var(--c-home)", "Купон зашёл"], ["var(--c-away)", "Зашёл хедж"], ["var(--gold)", "Ваш хедж"]])}
     </section>
 
     <button type="button" class="btn big gold" data-go>⚡ Поставить хедж на ${esc(bk)} · кэф ${fo(form.odds)}</button>
-    <p class="note">Кэф в Live меняется быстро. Проверьте его перед ставкой и пересчитайте, если он изменился.</p>
+    <p class="note">Это расчёт, а не гарантия. Он верен, только если обе ставки приняты по указанным кэфам; кэф в Live меняется быстро, ставку могут не принять или порезать. Ставки связаны с риском потери денег. 18+</p>
   `;
   hedgeChart(host.querySelector("[data-chart]"), {
     payout: form.payout, stake: form.stake, odds: form.odds, amount: r.hedge_amount,
@@ -215,15 +215,15 @@ function helpSheet() {
   sheet(`
     <h2>Как работает хедж</h2>
     <p>Вы поставили экспресс, почти все события зашли, осталось последнее. Если оно не зайдёт, пропадёт весь купон.</p>
-    <p><b>Хедж</b> — вторая ставка на противоположный исход последнего события. Тогда вы в плюсе при любом результате.</p>
+    <p><b>Хедж</b> — вторая ставка на противоположный исход последнего события. По расчёту это позволяет остаться в плюсе при обоих исходах — если обе ставки приняты по этим кэфам.</p>
     <div class="example">
       <div class="kv"><span>Ставка на экспресс</span><b>50 000 ₽</b></div>
       <div class="kv"><span>Выплата, если зайдёт</span><b>500 000 ₽</b></div>
       <div class="kv"><span>Хедж на противоположный исход, кэф 2.20</span><b>227 273 ₽</b></div>
-      <div class="kv"><span>Итог при любом исходе</span><b class="pos">+222 727 ₽</b></div>
+      <div class="kv"><span>Расчётный итог при обоих исходах</span><b class="pos">+222 727 ₽</b></div>
     </div>
     <p><b>Кэф</b> — множитель выигрыша: ставка 1 000 ₽ на кэф 2.20 вернёт 2 200 ₽.</p>
-    <p><b>Выкуп (Cash Out)</b> — букмекер предлагает забрать деньги досрочно, но берёт комиссию. Хедж обычно выгоднее на 5–15%.</p>
+    <p><b>Выкуп (Cash Out)</b> — букмекер предлагает забрать деньги досрочно, но берёт комиссию. По расчёту хедж часто выгоднее на 5–15%.</p>
     <p><b>Противоположный исход</b> в футболе — это двойной шанс: против П1 ставят X2, иначе ничья «сожжёт» обе ставки.</p>
     <button type="button" class="btn" data-close>Понятно</button>
   `, (el, close) => el.querySelector("[data-close]").addEventListener("click", close));

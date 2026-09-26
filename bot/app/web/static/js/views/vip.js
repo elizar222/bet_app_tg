@@ -11,8 +11,8 @@ export function vipSheet(text) {
     <h2>${esc(text || me.vip_text)}</h2>
     <ul class="checks">
       <li>Безлимитные расчёты хеджа 24/7</li>
-      <li>Режимы «Без риска» и «Свой %»</li>
-      <li>Приоритетные сигналы и разборы</li>
+      <li>Режимы «Возврат ставки» и «Свой %»</li>
+      <li>Расширенная аналитика и разборы</li>
     </ul>
     <button type="button" class="btn big gold" data-dep>Пополнить на ${bk}</button>
     <label class="field"><span>Уже есть депозит? Введите ваш ${bk} ID</span>
