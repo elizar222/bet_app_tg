@@ -59,7 +59,11 @@ export async function copy(text) {
 }
 
 export function openLink(url) {
-  if (!url) return;
+  if (!url || /example\.com|changeme/.test(url)) {
+    // реф-ссылка ещё не настроена в админке — не уводим пользователя на заглушку
+    toast("Ссылка на 1win ещё не настроена. Админ: /admin → Тексты и ссылки");
+    return;
+  }
   if (url.startsWith("https://t.me/") && tg?.openTelegramLink) tg.openTelegramLink(url);
   else if (tg?.openLink) tg.openLink(url);
   else window.open(url, "_blank", "noopener");
