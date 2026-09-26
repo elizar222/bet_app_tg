@@ -46,14 +46,14 @@ DONE_STATUSES = {"FT", "AET", "PEN", "AWD", "WO", "CANC", "ABD", "PST"}
 TTL = {
     "fixtures": (3 * 3600, 900),
     "fixtures_later": (24 * 3600, 6 * 3600),
-    "live": (240, 60),
+    "live": (20 * 60, 60),
     "odds_today": (4 * 3600, 1200),
     "odds_later": (12 * 3600, 3 * 3600),
     "standings": (12 * 3600, 3 * 3600),
     "predictions": (12 * 3600, 6 * 3600),
     "injuries": (12 * 3600, 3 * 3600),
     "team_last": (12 * 3600, 6 * 3600),
-    "fixture_live": (240, 60),
+    "fixture_live": (10 * 60, 60),
 }
 LOOKAHEAD_DAYS = 7
 RESERVE = 20  # столько запросов держим в запасе под обязательные
@@ -210,7 +210,7 @@ class ApiFootballProvider:
         )
         if maybe_live:
             # один запрос «все Live» — его же использует поиск
-            for r in await self.get("/fixtures", {"live": "all"}, "live", shape=self._slim, tag="all"):
+            for r in await self.get("/fixtures", {"live": "all"}, "live", shape=self._slim, tag="all", optional=True):
                 self._index[r["fixture"]["id"]] = r
                 if r["league"]["id"] in self.leagues:
                     out[r["fixture"]["id"]] = r
@@ -248,7 +248,7 @@ class ApiFootballProvider:
 
         rows = await self._day_index()
         if self._maybe_live(rows):
-            for r in await self.get("/fixtures", {"live": "all"}, "live", shape=self._slim, tag="all"):
+            for r in await self.get("/fixtures", {"live": "all"}, "live", shape=self._slim, tag="all", optional=True):
                 self._index[r["fixture"]["id"]] = r
             rows = list(self._index.values())
         found = []
